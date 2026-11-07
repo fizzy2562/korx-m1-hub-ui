@@ -13,7 +13,7 @@ Experiments in running the **PicoFaceM1** Korg M1 engine ([Michi71's PicoVintage
 | `src/adapter/` | The Firmware Hub adapter (`hub_adapter_ui.cpp`): the Hub's `vibe_wasm_*` ABI around the Pico engine, 31.25 kHz → host-rate resampling, the soft limiter, the UI hooks. `hub_adapter_baseline.cpp` is the earlier UI-less version. `lite_sets_*.h` list which programs exist in each build |
 | `tools/` | `shot.mjs` (render the wasm's screen to a PNG with scripted button/encoder events), `levels.mjs` (peak / clipping measurements), `bake_font.py` (font baker), `wasm_sig.mjs` / `wasm_imports.mjs` (ABI inspection), `lite-bank/` (the sample-compression and bank tools for the FM-1 build) |
 | `build/` | The Windows `zig c++` build scripts used on the build box |
-| `docs/` | [STATUS](docs/STATUS.md) (where we are), [FINDINGS](docs/FINDINGS.md) (the technical discoveries: Hub ABI, control IDs, layout standard, bugs), [SOUND_ISSUES](docs/SOUND_ISSUES.md) (the open audio problem), [THIRD_PARTY](docs/THIRD_PARTY.md), `images/`, and `qwen-briefs/` (the prompts the code was generated from) |
+| `docs/` | [STATUS](docs/STATUS.md) (where we are), [FINDINGS](docs/FINDINGS.md) (the technical discoveries: Hub ABI, control IDs, layout standard, bugs), [SOUND_ISSUES](docs/SOUND_ISSUES.md) (the open audio problem), [CLEAN_ROOM_SPEC](docs/CLEAN_ROOM_SPEC.md) (a behaviour-only specification of the M1 engine, for an independent implementation), [REA_PLAN](docs/REA_PLAN.md) (how to use REA to confirm and extend it), [THIRD_PARTY](docs/THIRD_PARTY.md), `images/`, and `qwen-briefs/` (the prompts the code was generated from) |
 
 ## What is deliberately NOT in this repository
 
