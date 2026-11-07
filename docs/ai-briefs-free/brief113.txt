@@ -1,0 +1,7 @@
+TASK: write ONE Python 3 script `apply_fix.py` (usage: `python3 apply_fix.py <in> <out>`) with exact replacements. Output format exactly:
+
+### FILE: apply_fix.py
+<python code>
+
+Rules: define `rep(src, old, new, tag)` asserting `src.count(old) == 1` (else print tag, sys.exit(1)). Files may use CRLF: open with newline='', replace '\r\n' by '\n' after reading, convert back to '\r\n' before writing (newline=''). Use r'''...''' strings with no leading/trailing newline. Print "OK 1".
+ 1. old: `        g_blk[40] = 99;\n`   new: `        g_blk[40] = 99;\n        g_blk[41] = 99;\n        g_blk[39] = 33;\n        g_blk[43] = 0;\n        g_blk[42] = 0;\n`  (Note: this must be one edit; g_blk[39] = 33 afterwards overrides the earlier g_blk[39] = 0 line, which is fine.)

@@ -1,0 +1,8 @@
+TASK: write ONE Python 3 script `apply_fix.py` (usage: `python3 apply_fix.py <in> <out>`) with exact replacements. Output format exactly:
+
+### FILE: apply_fix.py
+<python code>
+
+Rules: define `rep(src, old, new, tag)` asserting `src.count(old) == 1` (else print tag, sys.exit(1)). Files may use CRLF: open with newline='', replace '\r\n' by '\n' after reading, convert back to '\r\n' before writing (newline=''). Use r'''...''' strings with no leading/trailing newline. Print "OK 2".
+ 1. old: `m1::FxComboRev& r = g_rom.fx->crev[i];`   new: `const m1::FxComboRev& r = g_rom.fx->crev[i];`
+ 2. old: `m1::FxComboEr& e = g_rom.fx->cer;`   new: `const m1::FxComboEr& e = g_rom.fx->cer;`

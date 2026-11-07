@@ -1,0 +1,21 @@
+TASK: write TWO files, output format exactly `### FILE: <name>` then plain code (no fences, NO rambling or thinking-aloud comments).
+1. `m1free_fx_combo.h` : `#pragma once`, include "m1_engine/m1_fx.h" and <math.h>; namespace m1free; `inline void generateFxTablesCombo(m1::FxTables& t)` filling t.crev[0..1] (struct FxComboRev, Dly/Hall and Dly/Room) and t.cer (struct FxComboEr, Dly/Early Ref). Helper `static inline long fxcb_rnd(double x){return (long)floor(x+0.5);}`. Touch only those fields. All values are ORIGINAL designs from standard Schroeder/Moorer reverb theory.
+
+STRUCT FxComboRev { float g[3], ger[2], cout[4]; int16_t ap_d[3], comb_d[4], comb_tap[4]; float eq[6]; float g_in; float fb[4][98]; float damp[4][100]; int16_t base_ap, base_b, base_c; };
+Fill for index i=0 (Hall, scale s=1.0, T60 from 0.6 s to 8.0 s) and i=1 (Room, scale s=0.5, T60 from 0.25 s to 3.0 s):
+ - g = {0.55f, 0.5f, 0.5f}; ger = {0.30f, 0.25f}; cout = {0.25f, 0.25f, 0.25f, 0.25f}; g_in = 0.45f.
+ - ap_d = { fxcb_rnd(142*a), fxcb_rnd(277*a), fxcb_rnd(107*a) } where a = 0.5 + 0.5*min(s,1.0); each at least 8.
+ - comb_d[k] = fxcb_rnd(cb0[k]*s) with cb0 = {1687,1601,2053,2251}, each at least 64; comb_tap[k] = fxcb_rnd(comb_d[k]*tr[k]) with tr = {0.37,0.63,0.50,0.45}.
+ - eq pass-through: eq[0]=eq[1]=eq[2]=eq[3]=0.0f, eq[4]=eq[5]=1.0f.
+ - base_ap = 0; base_c = fxcb_rnd(300*s); base_b = fxcb_rnd(470*s).
+ - fb[k][rt] for rt in 0..97: T60 = Tmin*pow(Tmax/Tmin, rt/97.0); val = pow(10.0, -3.0*comb_d[k]/(31250.0*T60))/0.9668; if val>0.97 then val=0.97. (For Room only indices 0..47 are used by the engine, but fill all 98 using the same formula with rt/97.0 so that the first 48 entries span a shorter range: Room uses T60 = Tmin*pow(Tmax/Tmin, rt/47.0) for rt<=47 and keeps the rt=47 value for rt>47.)
+ - damp[k][hd] for hd in 0..99: val = 0.7*pow(hd/99.0, 1.2)*(1.0+0.02*k); clamp to 0.7.
+STRUCT FxComboEr { float g[4], tg[25], T[25], A[4]; float g_in; };
+Fill t.cer: g = {0.50f, 0.45f, 0.40f, 0.40f}; g_in = 0.5f; for k in 0..24: tg[k] = 0.40*exp(-0.12*k) * (k%3==1 ? -1.0 : 1.0); T[k] = 0.04 + 0.96*pow(k/24.0, 0.9) + 0.012*sin(k*5.1), clamped to [0.02, 1.0]; A = {3.1f, 2.3f, 4.7f, 3.9f}.
+
+2. `combo_test.cpp` : native test. Use the context file rotsym_test4.cpp as skeleton (same includes, globals, fillRom call, never-derefence-g_rom.fx-before-fill rule: call fillRom at start of main). The generator is NOT yet hooked into fillRom, so after fillRom call `m1free::generateFxTablesCombo(m1free::g_free.fx);` once (g_free.fx is the non-const m1::FxTables; also visible as *g_rom.fx). Replace render by: `static void render(int typ, const uint8_t* p8, int dry, float* L, float* R, int total, int releaseAt)` : like before (program 0 copy, blk[98]=0, dry: blk[38]=33; else blk[38]=typ, blk[39]=0, blk[40]=99, blk[46]=1, blk[47+i]=p8[i]) but calls g_eng.noteOff(0,60) once when done >= releaseAt (chunks of 500 frames; make the chunk end exactly at releaseAt boundary is not needed). total 62500, releaseAt 20000. Buffers: AL,AR (wet), BL,BR (dry twin).
+Checks, print "PASS name"/"FAIL name <values>"; finally "SUMMARY pass=<n> fail=<m>", return fail?1:0:
+ 1 crev_tables: for i in 0..1: all comb_d>=64, ap_d>=8, fb values in (0,0.97], damp in [0,0.7]; and ring budget: 15628 + (150*31.25+6 + max(base_ap,base_b) + 4) + sum(ap_d+2) + sum(max(comb_d,comb_tap)+2) <= 32768.
+ 2 cer_tables: budget 15628 + (40*maxT+100)*31.25+3 + sum_j(40*A[j]+3) <= 32768 where maxT = max over T[k].
+ 3-5 for typ in {25,26}: params p8 = {150,0,20,30,60,0,30,10} for 25 and {150,0,20,30,30,0,30,10} for 26. Check: 'finite' (isfinite and |x|<=8 on AL, AR); 'reverb_tail' (R channel, energy over frames 30000..62500: eA>1e-4 and eA>10*eB); 'decay' (R energy over 50000..62500 < R energy over 30000..42500); 'delay_echo' (L channel energy over 24000..40000: eA>1e-5 and eA>10*eB).
+ 6 type 27, p8={100,0,20,30,20,10,0,0}: finite; 'er_tail' (R energy over frames 20300..26000: eA>1e-5 and eA>10*eB).

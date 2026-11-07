@@ -9,6 +9,7 @@
 #include "m1free_patches_fx2.h"
 #include "m1free_fx_reverb.h"
 #include "m1free_fx_rotsym.h"
+#include "m1free_fx_combo.h"
 #include <string.h>
 
 namespace m1free {
@@ -32,6 +33,7 @@ inline void fillRom(Free& f, m1::RomTables& rom) {
     generateFxTablesBasic(f.fx);
     generateFxTablesReverb(f.fx);
     generateFxTablesRotSym(f.fx);
+    generateFxTablesCombo(f.fx);
 
     rom.pcm = f.s.pcm;
     rom.pcmWords = f.s.pcmWords;
