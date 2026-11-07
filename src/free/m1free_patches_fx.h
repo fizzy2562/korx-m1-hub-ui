@@ -32,7 +32,7 @@ inline void generateFxPatches(PatchSet& p) {
     {
         uint8_t* blk = p.programs + 143 * 9;
         makeProgram(blk, "Flange Saw", 1, 0, 80, 2, 30, 80, 20);
-        uint8_t p8[8] = {55, 12, 0, 45, 6, 0, 0, 0};
+        uint8_t p8[8] = {55, 12, 7, 25, 6, 0, 0, 0};   // wave 7 = unipolar triangle: a sine+offset LFO can dip below zero and make the modulated read extrapolate, which rings at Nyquist with feedback
         setFx1(blk, 13, 50, p8);
     }
 

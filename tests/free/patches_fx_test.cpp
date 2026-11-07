@@ -42,7 +42,8 @@ int main() {
         uint8_t* blk = p.programs + 143 * 9;
         check("prog9_fx1_type", blk[38] == 13, "fx1 type != 13");
         check("prog9_bal_l", blk[40] == 50, "bal L != 50");
-        check("prog9_p3", blk[50] == 45, "p3 (feedback) != 45");
+        check("prog9_p3", blk[50] == 25, "p3 (feedback) != 25");
+        check("prog9_p2", blk[49] == 7, "p2 (wave) != 7");
         check("prog9_p4", blk[51] == 6, "p4 (delay) != 6");
     }
 

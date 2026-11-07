@@ -1,0 +1,26 @@
+TASK: write TWO files, output format exactly `### FILE: <name>` then the code (no markdown fences):
+1. `m1free_fx_rotsym.h` : `#pragma once`, includes "m1_engine/m1_fx.h" and <math.h>; namespace m1free; `inline void generateFxTablesRotSym(m1::FxTables& t)` filling t.sym (struct FxSym) and t.rot (struct FxRotary). Use helper `static inline long fxrs_rnd(double x){return (long)floor(x+0.5);}`. Only these fields are touched; do not zero anything else. All values are ORIGINAL designs from standard theory (no Korg data).
+2. `rotsym_test.cpp` : native test, modelled on the context file fx_render_test2.cpp (same includes, same renderCase style, same g_fxmem/g_rom/g_eng globals, same fillRom call). Prints one line per check "PASS name" or "FAIL name", returns nonzero if any fails. It must call m1free::fillRom first (the hook calling generateFxTablesRotSym will be added by me later), THEN additionally call m1free::generateFxTablesRotSym(g_rom.fx) ITSELF on the rom's FxTables (field name of the FxTables inside m1::RomTables is `fx`; it is a pointer-or-struct: look at fx_render_test2.cpp / m1free_all.h and use the same access as fillRom does).
+
+STRUCT FxSym { float mix2[3]; int16_t baseL[3], baseR[3]; int16_t inc[2]; int16_t off[3]; };
+Engine (Symphonic, 3 voices k, 2048-word delay line, delay in samples at 31250 Hz): mod = (wt2(ph1,off[k])*mix2[k] + wt2(ph0,off[k])) * depth, where wt2 is a 0..1 raised-sine table (2 cycles per table sweep), depth = p0(0..99)*2.56 (so up to 253). Read delay for left = baseL[k] + mod, right = baseR[k] + mod. Output = 4*sum of 3 voices. off[k] is the LFO phase offset in 0..127 table steps. ph advances by inc[i] per sample on a 2^20 wrap (wave index = ph>>13 over 128 steps; one table sweep = 2^20/inc samples; wt2 has 2 cycles per sweep).
+Design: voice spacing 120 degrees: off = {0, 43, 85}. mix2 = {0.5, 0.35, 0.5}. baseL = {180, 260, 340}, baseR = {340, 180, 260} (samples; must keep baseX + 2*253*1.5 < 2000: verify with a static check in code/assert in the test). inc[0] = 12, inc[1] = 47.
+
+STRUCT FxRotary { float c20,c24,c28,c2c,c30,c38,c40,c44; int16_t h_fb_tap,h_w,h_fix,h_base,d_w,d_base; int16_t micL[5], micR[5]; float g120,g124,g130,g134; int16_t accel[2]; int16_t slow[21], fast[21]; float depth_k[4]; };
+Fill exactly:
+ - HP crossover (horn band) with a=0.85: c20=-1.0f, c40=-(1+a)/2/0.966797 (= about -0.9556), c28=a/(-0.966797) (about -0.8792). (engine: hi = (-0.966797)*(c40*(m + c20*x1) + c28*hi1)  -> first-order highpass).
+ - LP (drum band) with a=0.85: c24=1.0f, c44=(1-a)/2 = 0.075f, c2c=a=0.85f.
+ - c30=0.0f, c38=0.0f, h_fb_tap=8.
+ - h_w=0, h_base=20, h_fix=45, d_w=0, d_base=24.
+ - micL = {12,30,52,90,140}, micR = {20,44,66,118,170}.
+ - g120=0.25f, g124=0.35f, g130=0.35f, g134=0.25f.
+ - accel = {210, 410}.
+ - slow[i] = fxrs_rnd(30 * 2^((i-10)/10.0)), fast[i] = fxrs_rnd(250 * 2^((i-10)/10.0)) for i=0..20 (use pow).
+ - depth_k = {0.3f, 0.4f, 20.0f, 8.0f}.
+
+TEST (drive the real engine; copy renderCase mechanics from fx_render_test2.cpp but with a generic helper `render(prog, typ, blk47_54[8], dry)` that copies program 0's 143-byte block, sets blk[98]=0, sets blk[38]=typ, blk[39]=0, blk[40]=99 (wet balance 99 for FX1; for dry twin set blk[38]=33 as the existing test does), blk[46]=1 (FX1 on, parallel), blk[47..54] = given params, plays note 60 velocity 100 for 62500 frames and returns L and R buffers). Checks (use prog index 0 and compare against dry twin):
+ a. table sanity: sym.baseL[k]+0.5*... i.e. baseX[k] + 760 < 2000 for all k both channels; rot.slow[10]==30, fast[10]==250, slow/fast monotonic increasing; fast[20] < 600.
+ b. Symphonic (typ 23, params {60,0,0,0,0,0,0,0}): all samples finite and |x|<=1.0 ; RMS of left over last 20000 frames > 1e-3 ; left and right RMS differ by < 6 dB; the wet signal differs from the dry twin (sum |wet-dry| over 20000 frames > 1.0).
+ c. Rotary (typ 24, params {99,0,0,0,0,0,0,0} slow): finite, bounded, RMS > 1e-3 ; amplitude modulation present: compute RMS in 40 consecutive windows of 1024 frames over frames 20000..61000 (left channel) and require max/min window RMS ratio > 1.05 for slow rotary.
+ d. Rotary fast (p7=1) vs slow (p7=0): modulation depth measure (max/min of window RMS) is reported (print numbers) and both finite.
+ Use only <stdio.h>, <math.h>, <string.h>, <stdint.h>. Static buffers (no malloc).

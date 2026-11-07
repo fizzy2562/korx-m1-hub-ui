@@ -1,0 +1,7 @@
+TASK: write ONE Python 3 script `apply_fix.py` (usage: `python3 apply_fix.py <in> <out>`) with one exact replacement. Output format exactly:
+
+### FILE: apply_fix.py
+<python code>
+
+Rules: define `rep(src, old, new, tag)` asserting `src.count(old) == 1` (else print tag, sys.exit(1)). Files may use CRLF: open with newline='', replace '\r\n' by '\n' after reading, convert back to '\r\n' before writing (newline=''). Use r'''...''' strings with no leading/trailing newline. Print "OK 1".
+ 1. old: `        uint8_t p8[8] = {55, 12, 0, 45, 6, 0, 0, 0};`   new: `        uint8_t p8[8] = {55, 12, 7, 25, 6, 0, 0, 0};   // wave 7 = unipolar triangle: a sine+offset LFO can dip below zero and make the modulated read extrapolate, which rings at Nyquist with feedback`
