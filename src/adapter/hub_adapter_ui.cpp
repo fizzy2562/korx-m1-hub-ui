@@ -48,8 +48,7 @@ double g_readPos = 0.0;
 int g_framesRendered = 0;
 
 void ensureFrames(int needed) {
-    int have = g_framesRendered - (int)g_readPos;
-    while (have < needed) {
+    while (g_framesRendered < needed) {
         float L[64];
         float R[64];
         g_eng.render(L, R, 64);
@@ -60,7 +59,6 @@ void ensureFrames(int needed) {
             g_ringWrite = (g_ringWrite + 1) & (kRingSize - 1);
         }
         g_framesRendered += 64;
-        have += 64;
     }
 }
 

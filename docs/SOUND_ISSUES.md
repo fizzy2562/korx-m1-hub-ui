@@ -1,4 +1,56 @@
-# Open problem: the browser build sounds bad and "clips"
+# The browser sound problem: root cause found (resampler buffering bug)
+
+**Status (2026-11-07): the main cause was found and fixed.** It is a source-level indexing bug in the 31.25 kHz → host-rate resampler, found by an outside reviewer reading this repository and then **verified here against the native engine**. Earlier builds (every `.wasm` produced before this fix, including `korx-m1-hub` and `korx-m1-lite`) have it. Remaining quality questions (limiter character, the Lite codec) should be judged only on builds made *after* the fix.
+
+## The bug
+
+```cpp
+void ensureFrames(int needed) {
+    int have = g_framesRendered - (int)g_readPos;   // frames buffered AHEAD of the read position
+    while (have < needed) { /* render 64 frames, have += 64 */ }
+}
+...
+ensureFrames(i0 + 4);                                // needed = an ABSOLUTE source index
+```
+
+`have` is a *relative* lookahead; `needed` is an *absolute* index that grows forever. So the requirement "lookahead ≥ i0 + 4" got ever larger and the adapter rendered the engine further and further ahead, about **twice as fast as it was consumed**. Two consequences:
+
+1. **Every envelope, LFO and effect ran at double speed.** Notes decayed in half the time.
+2. The 2,048-frame ring can only hold the newest 2,048 frames; once `i0` passed ≈ 2,040 source frames (≈ 65 ms), the interpolator was reading ring slots that had already been overwritten by later audio.
+
+The first ~65 ms (the attack) was right, then the sound deteriorated. Peak/RMS tests never noticed because levels stayed plausible. The bug was present from the first Hub build, so no earlier build was a fair test of the engine.
+
+**Fix** (`src/adapter/*.cpp`): compare absolute positions with absolute positions:
+
+```cpp
+void ensureFrames(int needed) {
+    while (g_framesRendered < needed) { /* render 64 frames into the ring */ }
+}
+```
+
+## Evidence (`tools/drift.mjs`, RMS of a 50 ms window of a held middle-C, Piano programme 1)
+
+| t (s) | native engine (reference, 31.25 kHz) | **before fix** | **after fix** |
+|---|---|---|---|
+| 0.4 | 0.102 | 0.070 | 0.107 |
+| 0.8 | 0.069 | 0.028 | 0.072 |
+| 1.5 | 0.030 | 0.013 | 0.031 |
+
+Before the fix the curve was the correct one *compressed in time by exactly 2×*: `before(t) = after(2t)` at every sampled point (for example before(0.1 s) = 0.120 = after(0.2 s); before(1.5 s) = 0.0130 = after(3.0 s) = 0.0134). After the fix it follows the native engine within a few percent. (The native reference note ends near 3 s, so the 3 s row is omitted.) Peak/clipping measurements are essentially unchanged by the fix (`tools/levels.mjs`).
+
+## One more observation, not a bug
+
+The cubic interpolator outputs the value between `ring[i0+1]` and `ring[i0+2]` rather than between `ring[i0]` and `ring[i0+1]`: a constant one-sample (32 µs) advance. It does not distort anything and is left as is.
+
+## Still worth doing
+
+* **Listen to a post-fix build before touching anything else.** The soft limiter, the velocity-driven loudness and the Lite codec are all separate, smaller questions that were mixed into the complaint. The earlier measurements below remain correct but were taken on builds that had the bug.
+* The remaining checks proposed earlier (resampler isolation test against an offline high-quality resample, calibration against a native firmware's levels, headroom before the limiter) are still reasonable A/B experiments, in that order.
+
+---
+
+# Earlier investigation (kept for the record; measured on pre-fix builds)
+
 
 **Report (human tester, 2026-11-07):** "everything clips, the sounds are terrible", and the PicoFace hardware "sounds so much better". This was reported on `korx-m1-ui.wasm` before the fixes below, and again after the full-quality / limiter build was supplied. **The cause has not been found.**
 
