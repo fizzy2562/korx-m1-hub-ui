@@ -24,3 +24,10 @@
 ## Not verified
 
 Human visual inspection is not available in this environment, so final subjective spacing/clipping review remains outstanding. No unrelated processes or local models were run.
+
+## Follow-up fixes (2026-11-07, qwen patch, verified by rendering)
+
+- Timbre ON/-- flag was inverted: bit 4 of the timbre byte set means **off** (m1_params `Toggle` convention). Fixed.
+- A stray voice-meter rectangle overlapped the program info line. Removed.
+- Program screen now shows the two effect names (FX 1 / FX 2) from the program block.
+- Still open: unused timbres (E-H) draw full-width level bars; EG graph stroke is thin; not yet measured on the FM-1.

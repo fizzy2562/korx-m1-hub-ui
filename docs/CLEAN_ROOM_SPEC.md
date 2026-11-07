@@ -1,6 +1,6 @@
 # Korg M1 engine: behaviour specification (draft v0.1)
 
-**Purpose.** Describe *what an M1-style synth engine does*, precisely enough that someone who has never seen Korg's code or ROMs can implement it in Rust or C, and then check it against measurements. It contains behaviour, formulas and structure only: **no ROM addresses, no table contents, no sample data, no code.**
+**Purpose.** Describe *what an M1-style synth engine does*, with the aim that someone who has never seen Korg's code or ROMs can implement it in Rust or C and then check it against measurements. **Status: an incomplete draft.** It is not yet precise enough to implement from alone; §15.1 lists what is still missing. It contains behaviour, formulas and structure only: **no ROM addresses, no table contents, no sample data, no code.**
 
 **Education only.** Written to learn how a classic sample-based (ROMpler) synthesiser is built. Nothing here distributes Korg's data.
 
@@ -72,7 +72,7 @@ step(4.12) = S[d >> 7] + (S[d >> 7] * F[d & 127] >> 16)
   * *Stage type B:* bilinear one-pole with a zero at Nyquist, DC gain 1: `y = −T·y₁ + (1+T)/2·(x + x₁)` with `T = 2k − 1`.
   * Each of two filter units contains one A and one B stage; unit 1 scales `k` by 0.707.
   * `k` as a function of the cutoff register is a **12-bit lookup**: **[MEASURE]** (§14.3). A one-pole with `k = 1 − exp(−2π·fc/fs)` and a monotone register→`fc` mapping measured from the real filter is the right way to rebuild it.
-* **Oversampling [MEAS]:** the filter runs at **twice the output rate**: every output sample passes the four stages twice with the input held. This doubles all corner frequencies relative to evaluating `k` at 31.25 kHz. Best fit to recordings, not a hardware measurement.
+* **Oversampling [ASSUMED]:** the filter runs at **twice the output rate**: every output sample passes the four stages twice with the input held. This doubles all corner frequencies relative to evaluating `k` at 31.25 kHz. It is the best fit to two recordings (which carry hall, chorus and MP3 coding), **not** a measurement of the hardware, and nothing here distinguishes it from other fits (see §14.3 and §15).
 
 ## 6. Amplitude (VDA) and velocity
 
@@ -136,7 +136,7 @@ Two effect units (effect 1, effect 2), fed by output buses A/B and C/D. In **par
 
 ## 13. Output
 
-Engine output is a float or Q15 stereo sum. The PicoFace hardware multiplies by `master × 2` and **soft-clips** above 0.9 (a smooth knee that never exceeds 1.0); "one voice peaks about −12 dBFS" and 16 voices sum well below full scale. Any implementation needs equivalent headroom and a limiter. **[OS]**/engineering.
+Engine output is a float or Q15 stereo sum. **This section describes the PicoFaceM1 port's output stage, not behaviour of the M1 itself.** The port multiplies by `master × 2` and soft-clips above 0.9 (a smooth knee that never exceeds 1.0), and its authors note that one voice peaks around −12 dBFS and 16 voices sum below full scale. Any implementation needs equivalent headroom and a limiter; the exact curve is a design choice. **[ASSUMED]**
 
 ## 14. What to MEASURE (replaces trusting the original's tables)
 
@@ -164,11 +164,24 @@ For each, the method works on a real M1 **or** on any reference implementation y
 5. Only two MP3 recordings (with hall, chorus and unknown velocity) exist as ground truth. Agreement between the earlier Python reference and the engine checks the *port*, not the *analysis*.
 6. Symphonic Ensemble and Rotary depth parameters.
 
+### 15.1 Under-specified in this draft (found by independent review, 2026-11-07)
+
+This draft is **not yet implementable from alone**; the following must be defined (by measurement or by the analyst lane) before it can be called a specification:
+
+* **Units, ranges, rounding and boundaries** for the pitch formula (valid indices for negative or out-of-range `d`; quantisation of `F`), the cutoff sum (scale and sign of keyboard tracking, MG, joystick/aftertouch, EG intensity) and `n_e` folding at the ends of the keyboard.
+* **Filter state and ordering:** per-stage state, the exact input/hold/update order of the two passes, and the stage coefficients.
+* **Amplitude:** which terms add and which multiply, their scales, and where clipping and pan gains apply; "full scale 0x1FFF" is not an operational definition.
+* **Envelopes:** phase initialisation, segment transitions (break, sustain, release), zero-time behaviour, parameter ranges, and exact keyboard/velocity polarity arithmetic. "Ends at −48 dB" lacks the stopping condition.
+* **Loops:** the source index of every tap when the 8-tap window straddles `loop_start` or `end`, and equality and out-of-range cases for one-shots.
+* **Effects:** per-type routing, parameter ranges, coefficients and state initialisation; §16's ±1 sample / ±1 dB effect test cannot be run without them.
+* **Provenance:** several statements in §§3-9 carry no tag; tags should be added to every normative sentence.
+* **Reference implementations** can only validate a *port*, never the M1; real-M1 measurements (§14) are required for any claim of fidelity.
+
 ## 16. Acceptance tests (implementation-independent)
 
 * **Pitch:** every note within ±1 cent of 12-TET after the global scale offset.
 * **Envelope:** each EG segment's duration matches the measured curve within 5 %.
 * **Filter:** −3 dB frequency within ±5 % of the measured `fc` at 16 register points; slope 24 ± 3 dB/octave.
-* **Voices:** with 17 notes held on a Single program the oldest *releasing* voice is stolen first; a Double program holds 8 notes.
+* **Voices:** on a Single program, hold 16 notes, release the two oldest, then play two more: the new notes take the released channels (oldest-released first). With all 16 held and none released, the 17th note takes the oldest *held* channel. A Double program holds 8 notes. (A damper-held channel counts as releasing.)
 * **Output:** no sample above ±1.0 for any 16-voice full-velocity chord.
 * **Effects:** impulse response of each type matches the measured delay taps within ±1 sample and decay within ±1 dB.

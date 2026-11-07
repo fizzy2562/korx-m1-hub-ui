@@ -18,7 +18,7 @@
 
 ## 2. The two-lane clean-room process
 
-The aim is an implementation that provably owes nothing to Korg's code.
+The aim is an implementation whose dependence on Korg's code is **minimised and documented**. A two-lane process reduces contamination but **cannot prove** independent creation, especially because the analyst lane works from copyrighted firmware and the spec already contains prior source-informed analysis.
 
 ```
  Lane A: ANALYST                           Lane B: IMPLEMENTER
@@ -36,7 +36,7 @@ The aim is an implementation that provably owes nothing to Korg's code.
 
 ## 3. Setup, carefully
 
-1. **Provenance.** The README itself warns that lookalike repositories exist. Use only `github.com/morluto/rea`, `rea.tools` or the `rea-agents` npm package; check the publisher and download counts before running anything.
+1. **Provenance.** The README itself warns that lookalike repositories exist. Use only `github.com/morluto/rea`, `rea.tools` or the `rea-agents` npm package. Publisher and download counts are *not* evidence of safety: **pin an exact version, record and verify its integrity hash, and read what the package does** (install scripts, network access, what it registers) before running it.
 2. **Where.** Not on the shared AI box and not in this project's working directory. Use a throwaway VM or a separate user account. The ROM files are copyrighted, so keep them off any machine you do not control.
 3. **`npx rea-agents setup`** registers an MCP server and workflow instructions in your agent's configuration (with backups) and can optionally install Hopper after approval. Read the proposed changes before approving. Run it from a trusted directory outside the target project.
 4. **Disassembler.** Ghidra is free and has a 16-bit x86 real-mode processor module; REA can use an existing install. A large download on the shared box needs asking first.
@@ -62,3 +62,16 @@ Each yields a sentence for the spec **with evidence**, or an explicit "could not
 * **Real-mode x86 is awkward** (segments, overlapping tables, self-modifying patterns). Expect manual guidance.
 * **The contamination boundary is the whole point.** If the same agent session sees disassembly and then writes the engine, the result is a derivative work, not clean-room.
 * **Supply chain.** An MCP server with filesystem and process access deserves the same care as any package you run.
+
+## 6. Controls and gaps added after an independent review (2026-11-07)
+
+An independent review found the plan above too thin on controls. Before any ROM analysis is attempted:
+
+1. **Isolation:** a throwaway VM or separate account on a machine that does not hold other people's work; least-privilege user; an allowlist of readable folders and runnable processes; no access to unrelated projects, credentials or `.env` files; a snapshot to roll back to.
+2. **Supply chain:** pinned REA version with a recorded hash; review the package; network egress restricted to what the disassembler and REA need; no auto-update.
+3. **ROM custody:** record how each image was lawfully obtained; hash it; keep it read-only; keep it out of backups, logs, transcripts and any model context except Lane A's; delete work copies when finished.
+4. **Evidence format and redaction:** each Lane A finding is a short record (question, behavioural conclusion, confidence, how to re-verify by measurement) with **no addresses, code, tables or disassembly**. A reviewer signs each record before it enters the spec.
+5. **Lane B isolation, enforced:** a fresh session with no tool or file access except the spec; no ROM-derived files; its prompts and outputs logged; any question it asks goes through the reviewer. Prompt-injection is possible, so treat the spec as untrusted input.
+6. **Deliverables and stop criteria:** Lane A has a written question list, a time budget, and a defined "could not determine" outcome; it stops when the list is done, not when it runs out of ideas.
+7. **Measurements REA cannot do:** the silicon behaviour (filter chips, tone generator, effects DSP internals) needs its own plan from spec §14, with its own equipment and owner.
+8. **Legal gate:** a go/no-go decision, from someone qualified, on analysing the firmware, retaining notes, and publishing the resulting spec, before Lane A starts.

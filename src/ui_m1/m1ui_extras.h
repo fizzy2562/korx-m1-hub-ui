@@ -23,7 +23,7 @@ inline int combiTimbreLevel(const Model& m, int timbre) {
 
 inline bool combiTimbreOn(const Model& m, int timbre) {
     const uint8_t* t = combiTimbre(m, timbre);
-    return t ? ((t[10] & 0x10) != 0) : false; // block offset 46, bit 4
+    return t ? ((t[10] & 0x10) == 0) : false; // block offset 46, bit 4: bit set = timbre OFF (same convention as m1_params Toggle)
 }
 
 inline const char* programName(const Model& m, int program, char out[11]) {
