@@ -11,7 +11,7 @@ Play the Korg M1 engine from PicoFaceM1 (a float re-implementation of the M1's v
 | Engine → WebAssembly (Hub ABI, full 4 MiB PCM embedded) | Built | Loads in the real Hub player (headless Edge): held note, release and combi audio pass. Native-vs-wasm renders compared on the earlier build: within ~14 LSB (before resampling to the host rate) |
 | UI (header, page tabs, 4 arc knobs, status line, meters, 6 soft keys, K1–K6 page LEDs, touch) | **Works** | Rendered with scripted events and inspected as images; shown inside the real Hub. See `docs/images/` |
 | Parameter editing (all M1 program/combination edit pages, via PicoFaceM1's tables) | Works | Encoder edits change values live; `*` edited marker; Compare |
-| **Sound quality in the browser** | **Root cause fixed; needs a listening test** | A resampler buffering bug ran the engine at 2× speed and corrupted the ring buffer; fixed and verified against the native engine's decay curve. See [SOUND_ISSUES.md](SOUND_ISSUES.md) |
+| **Sound quality in the browser** | **Root cause fixed; tester: Lite build "much better"** | A resampler buffering bug ran the engine at 2× speed and corrupted the ring buffer; fixed and verified against the native engine's decay curve. See [SOUND_ISSUES.md](SOUND_ISSUES.md) |
 | "Lite" sample bank for the FM-1 (flash ceiling) | Built, quality compromised | 3-bit ADPCM, 51 programs / 19 combis, median ~29 dB SNR vs original, six programs worse than 15 dB. Hearing it is believed to be gritty |
 | FM-1 native firmware image | Built, **never flashed** | Passes the FM-1 build tool's checks (image 576,392 of 581,564 bytes). Plays a 4-note test pattern; no UI; no device run, no CPU measurement |
 | Test suites | 32/33 stress, 32/40 contract | The failures are known: a small residue after All-Sound-Off, and contract tests that assume unrestricted program stepping |
@@ -36,7 +36,7 @@ Verified (with a command and an output you can re-run):
 
 ## Open items, in priority order
 
-1. **Listen to a post-fix build** (all earlier builds had the resampler bug), then judge the limiter, headroom and the Lite codec separately (see [SOUND_ISSUES.md](SOUND_ISSUES.md)).
+1. **Listen to the post-fix full-quality build** (the tester has confirmed the post-fix *Lite* build sounds much better; all earlier builds had the resampler bug), then judge the limiter and headroom separately (see [SOUND_ISSUES.md](SOUND_ISSUES.md)).
 2. Investigate the small All-Sound-Off residue (the original build had none; the UI build leaves ~-36 dB).
 3. Port the UI to the FM-1 firmware: needs a 2- or 4-bit font (the 8-bit font data is ~42 KB; the image has ~5 KB spare).
 4. Flash-test the FM-1 image (rescue: hold OCT− while powering on), then measure CPU and flash-read cost.

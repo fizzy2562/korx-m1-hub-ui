@@ -44,7 +44,7 @@ The cubic interpolator outputs the value between `ring[i0+1]` and `ring[i0+2]` r
 
 ## Still worth doing
 
-* **Listen to a post-fix build before touching anything else.** The soft limiter, the velocity-driven loudness and the Lite codec are all separate, smaller questions that were mixed into the complaint. The earlier measurements below remain correct but were taken on builds that had the bug.
+* **Tester result (2026-11-07): the post-fix Lite build "seems to have worked ... much better".** The full-quality post-fix build has not been listened to yet. Listen to it before touching anything else. The soft limiter, the velocity-driven loudness and the Lite codec are all separate, smaller questions that were mixed into the complaint. The earlier measurements below remain correct but were taken on builds that had the bug.
 * The remaining checks proposed earlier (resampler isolation test against an offline high-quality resample, calibration against a native firmware's levels, headroom before the limiter) are still reasonable A/B experiments, in that order.
 
 ---

@@ -2,8 +2,8 @@
 
 Experiments in running the **PicoFaceM1** Korg M1 engine ([Michi71's PicoVintageSynthCollection](https://github.com/Michi71/PicoVintageSynthCollection)) as a **WebAssembly firmware for the VIBE FM Firmware Hub**, with a native-looking 480×320 touch UI, and as a firmware for the **M-VAVE FM-1**.
 
-> ## Status: unfinished. The main sound bug was found and fixed; the result still needs a listening test
-> A tester reported that every sound clipped and sounded bad in the browser build. An outside reviewer found a **resampler buffering bug** (the engine was being rendered at twice real-time speed and the ring buffer overwritten), and it was verified against the native engine and fixed: see [docs/SOUND_ISSUES.md](docs/SOUND_ISSUES.md). Builds made before the fix are not representative. Nobody has yet listened to a post-fix build. Treat this repository as a progress record and a code base to build on, not a finished product.
+> ## Status: unfinished. The main sound bug was found and fixed; the Lite build is confirmed much better by ear
+> A tester reported that every sound clipped and sounded bad in the browser build. An outside reviewer found a **resampler buffering bug** (the engine was being rendered at twice real-time speed and the ring buffer overwritten), and it was verified against the native engine and fixed: see [docs/SOUND_ISSUES.md](docs/SOUND_ISSUES.md). Builds made before the fix are not representative. The tester has listened to the post-fix **Lite** build and reports it is **much better**; the full-quality build has not been listened to yet. Treat this repository as a progress record and a code base to build on, not a finished product.
 
 ## What is in this repository
 
