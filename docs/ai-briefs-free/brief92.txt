@@ -1,0 +1,19 @@
+TASK: write ONE C++17 file `fx_render_test.cpp`, a native (host) test that renders effect programs through a synth engine and checks that each effect is stable and audible. No STL containers (only plain arrays), only <stdint.h>, <stdio.h>, <string.h>, <math.h>. Output format exactly:
+
+### FILE: fx_render_test.cpp
+<code>
+
+It includes "m1free_all.h" (gives namespace m1free with `inline Free g_free;` where `struct Free { Tables t; SampleSet s; PatchSet p; m1::FxTables fx; }` and `inline void fillRom(Free&, m1::RomTables&)` which generates every table, the samples and the patches, including programs 8..13 that use effects: 8 Chorus Pad (type 11), 9 Flange Saw (13), 10 Phase Keys (15), 11 Trem Organ (17), 12 Drive Lead (20), 13 Echo Pluck (9, a stereo delay with 250 ms left / 375 ms right)).
+The engine class `m1::Engine` (from "m1_engine/m1_engine.h", already included by m1free_all.h) has: `void init(const m1::RomTables& rom, int16_t* fxMem);` (fxMem = 65536 int16 words), `void playProgram(const uint8_t* block);` (the engine plays from that PERSISTENT 143-byte buffer), `void noteOn(uint8_t ch, uint8_t note, uint8_t vel);`, `void noteOff(uint8_t ch, uint8_t note);`, `void render(float* left, float* right, int frames);` (31250 Hz, any frame count). The engine object is large: declare it `static`.
+
+Write a function `static void renderCase(int prog, bool dry, float* outL, int total)` that: calls `m1free::fillRom(m1free::g_free, rom)` into a static `m1::RomTables rom` (once is enough; do it the first time), then `eng.init(rom, fxmem)` with a static `int16_t fxmem[65536]` (re-init every call so each case starts clean), copies the 143-byte block `m1free::g_free.p.programs + 143*prog` into a static `uint8_t blk[143]`, and if `dry` sets `blk[38] = 33` (effect 1 off), calls `eng.playProgram(blk)`, then `eng.noteOn(0, 60, 100)`, renders `0.25 s` is NOT used here: render 1.2 s = 37500 frames in chunks of 500 frames, then `eng.noteOff(0, 60)` and render the remaining frames up to `total` (total = 78125 frames = 2.5 s). Store the left channel in outL (a static float array of 78125).
+Main: for each prog in 8..13: render the wet case into static array A and the dry twin into static array B; compute (all in double): rmsA, rmsB over the whole 2.5 s; `finite` = every sample of A and B is finite and |x| < 8.0; diffRms = sqrt(mean((A[i]-B[i])^2)).
+Checks printed as `PASS <name>` / `FAIL <name> <detail>` with the program number in the name; return non-zero if any FAIL:
+ - `p<N>_finite`: finite;
+ - `p<N>_audible`: rmsA > 1e-4 and rmsB > 1e-4;
+ - `p<N>_effect_differs`: diffRms > 0.02 * rmsB (the effect changes the signal);
+ - for prog 13 (echo): energy (sum of squares) of A over samples [9375, 15625) (0.30 s to 0.50 s) must be greater than 1.5 times that of B over the same window, and also print both energies;
+ - for prog 11 (tremolo): compute the RMS in consecutive 25 ms windows (781 frames) over samples [9375, 37500) for A and for B; the ratio max/min of window RMS must be > 1.15 for A and < 1.10 for B;
+ - for prog 8, 9, 10 (chorus, flanger, phaser) and 12 (drive): only the generic checks above.
+Print one summary line per program: `prog <N> rmsA=<..> rmsB=<..> diff=<..>`. 
+The file must compile with ZERO warnings under `g++ -std=c++17 -O2 -Wall -Wextra`; declare every variable once per scope; no unused variables; use int loop counters. Static arrays only (no malloc/new).

@@ -4,6 +4,8 @@
 #include "m1free_tables.h"
 #include "m1free_samples.h"
 #include "m1free_patches.h"
+#include "m1free_patches_fx.h"
+#include "m1free_fx.h"
 #include <string.h>
 
 namespace m1free {
@@ -21,7 +23,9 @@ inline void fillRom(Free& f, m1::RomTables& rom) {
     generateTables(f.t);
     generateSamples(f.s);
     generatePatches(f.p);
+    generateFxPatches(f.p);
     memset(&f.fx, 0, sizeof f.fx);
+    generateFxTablesBasic(f.fx);
 
     rom.pcm = f.s.pcm;
     rom.pcmWords = f.s.pcmWords;

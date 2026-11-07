@@ -1,0 +1,38 @@
+TASK: write TWO C++17 files that generate, from FORMULAS ONLY (no ROM data), part of the effects coefficient table of a Korg-M1-style synth engine. No STL, no heap, only <stdint.h>, <math.h>. Output format exactly:
+
+### FILE: m1free_fx.h
+<code>
+
+### FILE: fx_tables_test.cpp
+<code>
+
+The engine header `#include "m1_engine/m1_fx.h"` defines (namespace m1) a large struct `FxTables`. You only touch these members of it (all other members are left untouched):
+```
+float   wt[0x102 + 130];       // LFO wave tables
+float   wt2[130];
+int32_t lfo_inc[217];
+float   dly_a[100], dly_b[100];
+float   trem_k, exc_k;
+int16_t eq_k[5];
+int16_t eq_gain[13];
+```
+=== m1free_fx.h (header-only, `#pragma once`, namespace m1free, everything inline) ===
+`#include "m1_engine/m1_fx.h"` and <math.h>. Provide `inline void generateFxTablesBasic(m1::FxTables& t);` which fills exactly those members (use double internally; round with `(int)floor(x + 0.5)`, helper `static inline long rnd(double)`):
+1. `wt`: first zero the whole array. The SINE segment occupies wt[0..128] (129 points): wt[j] = sin(pi*(j + 0.5)/128)^2 for j = 0..128 (a unipolar raised cosine between 0 and 1; note wt[128] == wt[0]). The TRIANGLE segment occupies wt[0x102 + j] for j = 0..128: tri(j) = (j <= 64) ? j/64.0 : (128 - j)/64.0 (so 0 at both ends, 1 at j = 64). All other entries stay 0.
+2. `wt2[j]` for j = 0..129: sin(pi*(2*j + 0.5)/128)^2 (the same raised cosine at DOUBLE the rate; periodic with period 64 points).
+3. `lfo_inc[v]` for v = 0..216 (integer 20-bit LFO phase increments per sample): let `raw` = (v <= 99) ? 3*(v + 1) : (v <= 199) ? (v - 99)*10 + 0x136 : (v - 199)*100 + 0x578; then `lfo_inc[v] = raw * 100 / 0x12A` using INTEGER division.
+4. `dly_a[hd]`, `dly_b[hd]` for hd = 0..99 (delay-loop damping: a one-pole low-pass whose pole is `a` and gain `b`): x = hd/99.0; a = 0.75 * pow(x, 1.3); b = 1.0 - a. Store as float.
+5. `trem_k = 0.01f`; `exc_k = 0.0078f`.
+6. `eq_k[i]` for i = 0..4 (shelf corner coefficient in Q13, corners 250, 500, 1000, 2000, 4000 Hz): T = tan(pi * fc / 31250.0); k = (1 - T)/(1 + T); eq_k[i] = (int16_t) rnd(8192.0 * k).
+7. `eq_gain[a]` for a = 0..12 (Q15 linear gain for 0 .. -12 dB in 1 dB steps): g = pow(10.0, -a/20.0); eq_gain[a] = a == 0 ? 32767 : (int16_t) rnd(32768.0 * g).
+
+=== fx_tables_test.cpp ===
+A standalone program (`main`) that includes "m1free_fx.h", allocates a `static m1::FxTables t;` (zero-initialised static storage), calls generateFxTablesBasic, and prints `PASS <name>` / `FAIL <name> <detail>`, returning non-zero if any FAIL:
+ - wt[0] within 1e-6 of sin(pi*0.5/128)^2; wt[64] within 1e-4 of 1.0; wt[128] == wt[0]; wt[129] == 0 (the gap is untouched); wt[0x102] == 0; wt[0x102 + 64] == 1.0; wt[0x102 + 128] == 0; wt[0x102 + 32] within 1e-6 of 0.5;
+ - wt2[0] within 1e-6 of sin(pi*0.5/128)^2; wt2[32] within 1e-6 of sin(pi*(64.5)/128)^2... i.e. compute the expected value with the same formula in the test; also wt2[64] within 1e-6 of wt2[0];
+ - lfo_inc[0] == 3*100/298 (== 1), lfo_inc[99] == 300*100/298, lfo_inc[100] == (10 + 0x136)*100/298, lfo_inc[199] == (1000 + 0x136)*100/298, lfo_inc[216] == (17*100 + 0x578)*100/298; lfo_inc is non-decreasing for all v;
+ - dly_a[0] == 0.0f and dly_b[0] == 1.0f; for all hd: |dly_a[hd] + dly_b[hd] - 1.0| < 1e-6 and 0 <= dly_a[hd] <= 0.75;
+ - trem_k == 0.01f and exc_k == 0.0078f;
+ - eq_k[2] within 2 of 6691 (1 kHz) and eq_k is strictly decreasing for i = 0..4;
+ - eq_gain[0] == 32767; eq_gain[6] within 2 of 16423; eq_gain[12] within 2 of 8231; eq_gain strictly decreasing.
+Both files must compile with ZERO warnings under `g++ -std=c++17 -Wall -Wextra`; declare every variable once per scope; no unused variables; no sign-compare warnings (use int loop counters).

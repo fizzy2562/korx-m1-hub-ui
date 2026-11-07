@@ -9,7 +9,9 @@ A build of the engine with **no Korg data of any kind**: every table is generate
 | `src/free/m1free_tables.h` | pitch step tables, 4096-phase 8-tap interpolation kernel, LFO rate, envelope rise/fall rates, velocity curve, pan words, balance curve, delay start, just-intonation scale, and the filter coefficient tables (4 x 4096), all from formulas | `tests/free/tables_test.cpp`: 36 checks; the kernel's DC sum is exactly 1226 at all 4096 phases |
 | `src/free/m1free_samples.h` | 8 band-limited waveforms (sine, saw, square, triangle, organ, 25% pulse, soft saw, noise), 4 variants each so the playback step stays under the engine's cap, 100 multisounds, one drum | `tests/free/samples_test.cpp`: 7 groups, every cycle peaks at exactly 4096 |
 | `src/free/m1free_patches.h` | 8 original programs and 4 combinations, written byte by byte from the offsets in `m1_params`, every program on "No Effect" | `tests/free/patches_test.cpp`: 84 checks |
-| `src/free/m1free_all.h` | ties the three generators to `m1::RomTables` | n/a |
+| `src/free/m1free_fx.h` | effects tables, first batch (see Honest limits) | `tests/free/fx_tables_test.cpp`: 30 checks |
+| `src/free/m1free_patches_fx.h` | six original effect programs (chorus, flanger, phaser, tremolo, overdrive, stereo delay) | `tests/free/patches_fx_test.cpp`: 55 checks; `tests/free/fx_render_test.cpp`: engine render checks |
+| `src/free/m1free_all.h` | ties the generators to `m1::RomTables` | n/a |
 | `src/free/hub_adapter_free.cpp` | the Hub adapter with every ROM reference removed | `grep m1rom` finds nothing |
 
 ## Measured results (`tools/pitch_test.mjs`, `tools/levels.mjs`)
@@ -22,7 +24,7 @@ A build of the engine with **no Korg data of any kind**: every table is generate
 ## Honest limits
 
 * It does **not sound like an M1.** The sounds are plain synthetic waves; the filter, envelope, LFO and balance tables are modelled approximations (see the table in the conversation notes / `CLEAN_ROOM_SPEC.md` section 14 for what needs measuring on a real M1).
-* **No effects yet.** The effect coefficient table is all zeros; every generated program uses "No Effect". Reverb, chorus and the rest need their own designs.
+* **Effects: 16 of 33 types.** The LFO shapes, LFO speed law, delay-loop damping, EQ shelf corners/gains and the tremolo/exciter constants are generated (`src/free/m1free_fx.h`), which enables stereo delay, cross delay, chorus 1/2, flanger 1, cross flanger, phaser 1/2, tremolo 1/2, equalizer, overdrive, distortion and exciter. Six original programs (8-13) use them; `tests/free/fx_render_test.cpp` renders each through the real engine and checks it is finite, audible, differs from its dry twin, and (delay) echoes / (tremolo) modulates. **Not yet:** the six reverbs, early reflections, symphonic ensemble, rotary, and the delay+effect combinations (their tables are still zero, so those types stay silent: use "No Effect").
 * **No drum kits.** One noise hit exists but no kit maps it to keys.
 * **Playback range:** the engine caps the playback step at 3.0, so each waveform needs one variant per octave; this set covers keys up to 127 but has been pitch-tested only from note 36 to 84.
 * **Offline checks only.** Nobody has listened to this build.

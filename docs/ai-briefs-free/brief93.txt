@@ -1,0 +1,8 @@
+TASK: write ONE Python 3 script `apply_fix.py` (usage: `python apply_fix.py <hdr_in> <hdr_out> <test_in> <test_out>`) that patches two C++ files. Output format exactly:
+
+### FILE: apply_fix.py
+<python code>
+
+Rules: open every file with newline='' for reading and writing; do `text = text.replace('\r\n','\n')` after reading and `text.replace('\n','\r\n')` before writing (write with newline=''). Use raw triple-quoted strings (r'''...''') with no leading/trailing newline inside the quotes. Print "OK 2" at the end.
+EDIT 1 (header file): a REPLACE-ALL of the text `rnd(` with `fxrnd(`; assert that the text `rnd(` occurs exactly 3 times before replacing (else print the count and sys.exit(1)).
+EDIT 2 (test file): remove the single line `static float g_outL[78125];` together with its trailing newline; assert it occurs exactly once (else print and sys.exit(1)). Use rep-style replacement: old is the text `static float g_outL[78125];\n`, new is the empty string.

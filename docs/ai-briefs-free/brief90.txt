@@ -1,0 +1,34 @@
+TASK: write TWO C++17 files that add six ORIGINAL effect programs to a Korg-M1-style patch set. No STL, no heap, only <stdint.h>, <string.h>. Output format exactly:
+
+### FILE: m1free_patches_fx.h
+<code>
+
+### FILE: patches_fx_test.cpp
+<code>
+
+=== m1free_patches_fx.h (header-only, `#pragma once`, namespace m1free, everything inline) ===
+`#include "m1free_patches.h"` (given as context: it defines `struct PatchSet { uint8_t programs[100*143]; uint8_t combis[100*124]; uint8_t kits[4*210]; uint8_t global[21]; }`, `inline void put(uint8_t* blk, int off, int v)` which stores `(uint8_t)v`, `inline void setName(uint8_t* blk, const char* s)`, and `inline void makeProgram(uint8_t* blk, const char* name, int wave, int octave, int cutoff, int atk, int dcy, int sus, int rel)` which zero-fills a 143-byte program block and sets up one oscillator with the given wave (multisound index), octave, cutoff and VDA envelope, with byte 38 = 33 and byte 39 = 33 (No Effect on both)).
+Provide `inline void generateFxPatches(PatchSet& p);` that creates programs 8..13 at `p.programs + 143*n` (do NOT zero or modify anything else; it is called after generatePatches).
+EFFECT BLOCK in a program (25 bytes starting at byte 38): byte 38 = effect 1 type, 39 = effect 2 type (33 = none), 40 = effect 1 balance L, 41 = effect 1 balance R, 42/43 = effect 2 balances, 44/45 = out-3/4 pans (leave 0), 46 = switches (bits 0..1 = effect 1 on (use 0x03), bits 2..3 = effect 2 on, bit 4 = serial), bytes 47..54 = the 8 parameter bytes p[0..7] of effect 1, bytes 55..62 = effect 2 (leave 0). Words are little endian (low byte first). Parameter bytes p[k] are at byte 47 + k. Balance values 0..100 are the wet percentage.
+Write a helper `static inline void setFx1(uint8_t* blk, int type, int bal, const uint8_t* p8)` that sets byte 38 = type, byte 39 = 33, bytes 40 and 41 = bal, bytes 42..45 = 0, byte 46 = 0x03, and copies the 8 parameter bytes to bytes 47..54.
+The six programs (name; makeProgram(wave, octave, cutoff, atk, dcy, sus, rel); then setFx1 with the type, balance and p[0..7]):
+ 8  "Chorus Pad" : makeProgram(6, 0, 80, 20, 35, 80, 30); type 11 (Chorus 1), balance 40, p = {45, 30, 0, 0, 15, 0, 0, 0}   (depth, speed, triangle flag, -, delay ms, -, EQ high, EQ low)
+ 9  "Flange Saw" : makeProgram(1, 0, 80, 2, 30, 80, 20); type 13 (Flanger 1), balance 50, p = {55, 12, 0, 45, 6, 0, 0, 0}   (depth, speed, MG status, feedback, delay ms, -, EQ, EQ)
+ 10 "Phase Keys" : makeProgram(4, 0, 99, 0, 0, 99, 5); type 15 (Phaser 1), balance 50, p = {70, 25, 0, 30, 50, 0, 0, 0}   (depth, speed, MG status, feedback, manual)
+ 11 "Trem Organ" : makeProgram(4, 0, 99, 0, 0, 99, 5); type 17 (Tremolo 1), balance 70, p = {80, 60, 0, 0, 0, 0, 0, 0}   (depth, speed, MG status, shape)
+ 12 "Drive Lead" : makeProgram(1, 0, 90, 2, 30, 80, 20); type 20 (Over Drive), balance 70, p = {0, 0, 60, 70, 0, 0, 0, 0}   (-, -, drive, level, -, -, EQ high, EQ low)
+ 13 "Echo Pluck" : makeProgram(3, 0, 99, 0, 45, 10, 40); type 9 (St Delay), balance 45, p = {250 & 0xFF, 250 >> 8, 40, 30, 375 & 0xFF, 375 >> 8, 0, 0}   (delay L word ms, feedback, high damp, delay R word ms, EQ, EQ)
+Use `uint8_t` arrays for the p8 arguments.
+
+=== patches_fx_test.cpp ===
+Standalone program (`main`) including "m1free_patches_fx.h": a static PatchSet; call generatePatches(p) THEN generateFxPatches(p); print `PASS <name>` / `FAIL <name> <detail>` per check, return non-zero on any FAIL:
+ - program 8: name bytes "Chorus Pad" (10 chars exactly), byte 38 == 11, byte 39 == 33, byte 40 == 40, byte 41 == 40, byte 46 == 3, byte 47 == 45, byte 48 == 30, byte 51 == 15, byte 12 == 6;
+ - program 9: byte 38 == 13, byte 40 == 50, byte 50 == 45 (feedback), byte 51 == 6;
+ - program 10: byte 38 == 15, byte 47 == 70, byte 51 == 50;
+ - program 11: byte 38 == 17, byte 40 == 70, byte 48 == 60;
+ - program 12: byte 38 == 20, byte 49 == 60, byte 50 == 70;
+ - program 13: byte 38 == 9, bytes 47 and 48 == 0xFA and 0x00, byte 49 == 40, byte 50 == 30, bytes 51 and 52 == 0x77 and 0x01, byte 40 == 45;
+ - programs 8..13: byte 10 == 0, byte 86 == 99, byte 46 == 3;
+ - programs 0..7 are unchanged from generatePatches alone (compare against a second PatchSet built with only generatePatches), and programs 14..99 are entirely zero;
+ - combinations, kits and global are unchanged (compare with the second PatchSet).
+Both files compile with ZERO warnings under `g++ -std=c++17 -Wall -Wextra`; declare every variable once per scope; no unused variables; no sign-compare warnings.
