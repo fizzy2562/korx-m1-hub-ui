@@ -1,0 +1,12 @@
+# Anything derived from Korg's ROM data must never be committed.
+*.wasm
+*.fwsc
+*.bin
+*.pcm
+*.syx
+*.zip
+*.o
+*.elf
+m1_rom_tables.h
+m1_pcm*
+roms/

@@ -1,0 +1,37 @@
+TASK: write ONE C++17 header `m1ui_view.h` (header-only, `#pragma once`, no exceptions/RTTI/STL/heap; only <stdint.h>, <stdio.h>, <string.h>, <math.h>) that DRAWS the front-panel screen of a Korg M1 synth (480x320, RGB565) from the UI model. Output format exactly:
+
+### FILE: m1ui_view.h
+<code>
+
+It includes "gfx.h" (namespace gfx; summary below) and "m1ui_model.h" (namespace m1ui; summary below). Put the code in `namespace m1ui`.
+
+=== gfx API (already implemented; fonts `small_font` (15px), `mid_font` (21px), `big_font` (30px) are globals of type FontDef) ===
+gfx::W=480, gfx::H=320; gfx::rgb(r,g,b)->uint16_t; gfx::mix(a,b,t);
+gfx::clear(c); fillRect(x,y,w,h,c); blendRect(x,y,w,h,c,alpha); hline(x,y,w,c); vline(x,y,h,c); line(x0,y0,x1,y1,c);
+fillRoundRect(x,y,w,h,r,c); strokeRoundRect(x,y,w,h,r,thick,c); fillCircle(cx,cy,r,c);
+arc(cx,cy,r,thick,a0,a1,c)  // degrees clockwise from 12 o'clock, a0<a1
+int textWidth(font,s); text(font,x,baselineY,s,c); textC(font,cx,baselineY,s,c); textR(font,rightX,baselineY,s,c);
+
+=== model API (already implemented, in m1ui_model.h) ===
+struct Model { const Host* host; uint8_t mode /*0 Program,1 Combi*/; uint8_t program, combi; bool edited, comparing, shift; int nGroups; int group; int sub; char groupName[40][12]; uint8_t groupFirst[40]; int nParams; ... };
+int groupCount(const Model&); int groupSize(const Model&, int g);
+void slotText(const Model&, int slot, char* text, int n, float* norm, const char** label); // slot 0..3: text="" and norm=-1 when the slot is empty; norm is 0..1 (or -1 = no bar)
+void getName(const Model&, char out[11]); void captions(const Model&, char out[25][8]);
+
+=== what to write ===
+```
+struct Meters { float l = 0, r = 0; int voices = 0; };   // l,r in 0..1; voices 0..16
+inline void draw(const Model& m, const Meters& mt);       // draws the whole screen into gfx::fb
+```
+COLOURS (define as `static const uint16_t` constants via gfx::rgb): BG (11,17,25); CHIP (22,32,48); TRACK (31,43,61); BLUE (77,163,232); VIOLET (183,148,246); GREY (138,154,176); WHITE (235,240,248); DISC (27,38,56); DIVIDER (30,42,58); BTN (24,38,60); DARK (11,17,25).
+
+LAYOUT (pixels, exactly):
+1. gfx::clear(BG).
+2. HEADER (y 0..34): left at x=12, baseline y=24, mid_font, VIOLET: "PROGRAM" (mode 0) or "COMBI" (mode 1). Centre: build the string "NN" (two-digit zero padded current number: program or combi) in GREY mid_font and the name (getName) in WHITE mid_font, placed together centred on x=250 (total width = width(number) + 8 + width(name)), baseline y=24; after the name, if m.edited draw a "*" in BLUE; if m.comparing draw the word "STORED" in small_font BLUE right-aligned at x=330... (put it at x=330 baseline y=22 only when comparing). Right: 16 small voice squares 5x5 px, spacing 7 px, the last one ending at x=468, at y=14: square i (0..15) filled VIOLET when i < mt.voices else CHIP. Then hline(10,34,460,DIVIDER).
+3. TABS (y 41..67, chip height 26, radius 8): chips for the model's groups (text = groupName[g], small_font). Chip width = textWidth(small_font,name)+18, gap 6. Show a WINDOW of groups that fits in x from 10 to 470: start with the current group, then repeatedly add the neighbour on the left, then on the right (alternating; skip a side when there is none or when it would not fit) while the total width stays <= 460; draw the window left-to-right starting at x=10. Current group chip: fill VIOLET, text DARK; others fill CHIP, text GREY. Text baseline y=59, centred in the chip.
+4. KNOBS: four columns i=0..3 with centre x = 67 + 115*i. For each slot i call slotText(m, i, text, 12, &norm, &label). If text[0]==0 (empty slot) draw nothing for that column. Otherwise: (a) label: copy `label` UPPERCASED (max 14 chars) and draw it with textC small_font GREY at baseline y=88 (if wider than 108 px, cut characters from the end until it fits). (b) arc centre (x, 127): `gfx::arc(x,127,40,4,135,405,TRACK)`; if norm >= 0.005 draw `gfx::arc(x,127,40,4,135,135+270*norm,BLUE)` (clamp norm to 0..1; when norm is -1 or <0.005 draw no value arc); (c) disc: `fillCircle(x,127,32,DISC)`; (d) pointer: when norm >= 0: angle a = 135+270*norm (degrees clockwise from up); draw 2 parallel 1-px lines (offset by 1 px in x) from the centre (x,127) to (x + 26*sin(a), 127 - 26*cos(a)) in WHITE (use sinf/cosf with a converted to radians); when norm < 0 draw nothing. (e) value text: choose the largest font among big_font, mid_font, small_font whose textWidth(text) <= 108; draw it with textC in WHITE at baseline y = 197 for big_font, 195 for mid_font, 193 for small_font.
+5. STATUS LINE: centred at x=240, baseline y=222, small_font GREY: the string `"<group name> - <a>-<b> of <n>"` where a = sub+1, b = min(sub+4, groupSize(group)), n = groupSize(group); additionally append "  (page <g+1>/<nGroups>)".
+6. METERS: two thin bars: for ch 0 (L, level mt.l at y=240) and ch 1 (R, level mt.r at y=246): track fillRect(10,y,460,3,CHIP); filled width = clamp(level,0,1)*460; colour BLUE (VIOLET for the last 15% of the bar).
+7. SOFT KEYS: six buttons: x = 6 + 79*i (i=0..5), y=286, w=73, h=30, radius 8: fill BTN; label = captions(m, caps)[i] (the first 6 of the 25 caption rows) drawn with textC small_font WHITE at baseline y=306 (x centre = button x + 36). The 4th button (i==3) is VIOLET filled with DARK text when m.comparing; the 3rd (i==2) always BTN.
+Provide also `inline void fillLeds(const Model& m, uint8_t* buf384)` which zeroes the 384-byte buffer and writes the LED table: it is viewed as `uint32_t u[96]` and `float f[96]` (use memcpy to write, not pointer casts): words 32+b = RGB colour (0xRRGGBB) of button b, words 57+b = brightness float 0..1 for button b (b = 0..24). Light buttons K1..K6 (b = 10..15): for group index g = b-10 < nGroups: colour 0xB794F6 (violet) with brightness 1.0 when g == m.group else 0.25; colour 0x4DA3E8 for others is not needed. Also light button F4 (b=3) with colour 0xB794F6 brightness 1.0 when m.comparing, and button 17 (HOME) off.
+Make the file compact and complete: every function must compile. Use only the API listed above.

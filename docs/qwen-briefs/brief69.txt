@@ -1,0 +1,59 @@
+TASK: write ONE Python 3 script `apply_fix.py` that patches THREE C++ header files with EXACT string replacements. Usage: `python apply_fix.py <gfx_in> <gfx_out> <view_in> <view_out> <model_in> <model_out>`. Output format exactly:
+
+### FILE: apply_fix.py
+<python code>
+
+Rules: define `rep(src, old, new, tag)` asserting `src.count(old) == 1` (else print the tag and sys.exit(1)) and returning src.replace(old, new). All three files use CRLF line endings: open with newline='', `text = text.replace('\r\n','\n')` after reading, apply edits on the LF-normalised text, convert back with `text.replace('\n','\r\n')` before writing; write with newline=''. Put each old/new string in a raw triple-quoted string r'''...''' exactly as given (no extra leading/trailing newline inside the quotes). Print "OK 6" at the end.
+
+GFX edit G1. old:
+            float our_deg = 90.0f - (math_rad * 180.0f / 3.14159265f);
+new:
+            float our_deg = 90.0f + (math_rad * 180.0f / 3.14159265f);
+
+VIEW edit V1. old:
+        gfx::arc(cx, 127, 40, 4, 135, 405, TRACK);
+new:
+        gfx::arc(cx, 127, 40, 4, 225, 495, TRACK);
+VIEW edit V2. old:
+            float a = 135.0f + 270.0f * n;
+new:
+            float a = 225.0f + 270.0f * n;
+
+MODEL edit M1. old:
+        m1::paramFormat(*p, block(m), text, n, norm);
+    } else if (norm) {
+new:
+        m1::paramFormat(*p, block(m), text, n, norm);
+        if (norm && *norm < 0.0f && p->hi > p->lo) {
+            float v = (float)m1::paramGet(*p, block(m));
+            float nn = (v - (float)p->lo) / (float)(p->hi - p->lo);
+            *norm = nn < 0.0f ? 0.0f : (nn > 1.0f ? 1.0f : nn);
+        }
+    } else if (norm) {
+MODEL edit M2. old:
+inline void setMode(Model& m, int mode) {
+new:
+inline void stepItem(Model& m, int dir);
+
+inline void setMode(Model& m, int mode) {
+MODEL edit M3. old:
+    m.comparing = false;
+    if (m.mode == 0) {
+        if (m.host && m.host->playProgram) m.host->playProgram(m.progEdit);
+    } else {
+        if (m.host && m.host->playCombi) m.host->playCombi(m.combiEdit);
+    }
+    m.group = 0;
+new:
+    m.comparing = false;
+    if (m.host) {
+        int n = (m.mode == 0) ? m.program : m.combi;
+        bool ok = (m.mode == 0) ? m.host->hasProgram(n) : m.host->hasCombi(n);
+        if (ok) {
+            if (m.mode == 0) selectProgram(m, n);
+            else selectCombi(m, n);
+        } else {
+            stepItem(m, +1);
+        }
+    }
+    m.group = 0;

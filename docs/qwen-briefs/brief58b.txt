@@ -1,0 +1,25 @@
+TASK: write ONE Node.js ES-module script `shot.mjs` (Node 20, no npm packages, only built-ins: node:fs, node:zlib). Output format exactly:
+
+### FILE: shot.mjs
+<code>
+
+PURPOSE: load a firmware .wasm (a WebAssembly module that has either NO imports or only imports from module "env"), drive it with scripted events, and save the 480x320 screen it draws as a PNG, so a developer can look at the UI.
+
+USAGE: `node shot.mjs <fw.wasm> <out.png> [step ...]`  where each step is one of:
+  - `a:N`            run N audio blocks (calls vibe_wasm_audio(128, 0) N times)
+  - `e:type,id,down,value,midi`  send an event: vibe_wasm_event(type,id,down,value,midi) ; numbers are decimal (value may be a float; midi integer, default 0 if omitted)
+  - `m:status,d1,d2` send a MIDI event: vibe_wasm_event(5,0,0,0, status | d1<<8 | d2<<16)
+  - `s:path.png`     save a screenshot at this point (so several can be taken in one run)
+  Steps run in order. After all steps, the final screen is saved to <out.png> (always).
+
+WASM CONTRACT (exports): memory, vibe_wasm_init(sampleRate:number), vibe_wasm_io() -> byte offset of a Float32 array (outL is at float index 256 = byte offset io+1024, outR at index 512; not needed except for the meter below), vibe_wasm_audio(n, flags), vibe_wasm_event(type,id,down,value,midi), vibe_wasm_draw() -> byte offset of a uint16 RGB565 framebuffer, 480 wide, 320 high, row-major. Optional export vibe_wasm_labels() -> byte offset of 25*8 bytes (25 button captions, 8 bytes each, zero padded ASCII). Call `_initialize()` first if that export exists, then vibe_wasm_init(48000).
+Event type numbers are just passed through.
+
+DETAILS:
+- RGB565 -> RGB888: r = (p>>11)&31, g = (p>>5)&63, b = p&31; expand with r8=(r<<3)|(r>>2), g8=(g<<2)|(g>>4), b8=(b<<3)|(b>>2).
+- Write a valid PNG yourself: signature, IHDR (8-bit RGB, color type 2), one IDAT made with zlib.deflateSync of scanlines each prefixed with filter byte 0, IEND. Implement CRC32 yourself (table-based) for the chunks. Upscale the image 2x (nearest neighbour, each pixel becomes 2x2) so the output is 960x640 and easy to look at.
+- After saving, print one line per screenshot: `saved <path>` and, if vibe_wasm_labels exists, a line `labels: F1..F6 = a|b|c|d|e|f` (ids 0..5) using the 8-byte slots (id*8).
+- Also print the peak absolute value of outL (read 128 floats after each `a:` step run, keep the max) as `audio peak <x>` at the end if any `a:` step ran.
+- Keep it simple and robust; no external dependencies; exit code 1 with a clear message on bad arguments.
+
+- IMPORT STUBS: use WebAssembly.Module.imports(module); build the import object automatically: for every import of kind 'function' provide `() => 0` under its module/name (all modules, normally just 'env'); for kind 'memory'/'table'/'global' give a sensible default (WebAssembly.Memory({initial:256,maximum:65536}) etc.) -- function stubs are the only case that matters. Instantiate with WebAssembly.instantiate(bytes, imports).

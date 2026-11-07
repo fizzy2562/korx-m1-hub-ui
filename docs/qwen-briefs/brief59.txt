@@ -1,0 +1,25 @@
+TASK: write ONE Python 3 script `bake_font.py` (uses only the standard library plus Pillow (PIL)). Output format exactly:
+
+### FILE: bake_font.py
+<code>
+
+USAGE: `python bake_font.py <font.ttf> <out.h> <name1>:<px1> [<name2>:<px2> ...]`   e.g. `python bake_font.py DejaVuSansCondensed-Bold.ttf font_data.h small:15 big:30`
+
+It bakes anti-aliased bitmap fonts for the printable ASCII range 32..126 and writes ONE C++ header `out.h` (header-only, `#pragma once`, `#include <stdint.h>`).
+
+For every font spec NAME:PX it must emit (use the spec name as a C identifier prefix):
+1. `static const uint8_t NAME_bitmap[] = { ... };` -- all glyph bitmaps concatenated, 8-bit alpha (0..255), row-major, tightly cropped to each glyph's ink bounding box. A glyph with no ink (space) has w=h=0 and no bytes.
+2. `static const GlyphInfo NAME_glyphs[95] = { {off,w,h,bx,by,adv}, ... };` for chars 32..126 in order, where
+   - off = byte offset into NAME_bitmap (uint32_t is fine, use uint16_t only if the total is < 65536 else uint32_t -- choose automatically and make the struct field type match: define the struct ONCE at the top of the header as
+     `struct GlyphInfo { uint32_t off; uint8_t w, h; int8_t bx, by; uint8_t adv; };`  (always uint32_t off)
+   - w,h = cropped bitmap size in pixels
+   - bx = x offset of the bitmap's left edge from the pen position (can be negative)
+   - by = y offset of the bitmap's TOP edge from the BASELINE (negative = above the baseline)
+   - adv = advance width in pixels = round(font.getlength(ch)), at least 1 for printable chars
+3. `static const FontDef NAME_font = { PX, ascent, descent, line_height, NAME_glyphs, NAME_bitmap };` where the struct is defined once at the top as
+   `struct FontDef { uint8_t px; int8_t ascent; int8_t descent; uint8_t lineH; const GlyphInfo* glyphs; const uint8_t* bitmap; };`
+   with ascent = font.getmetrics()[0], descent = font.getmetrics()[1] (positive numbers), lineH = ascent+descent.
+
+HOW TO RASTERISE a glyph (do exactly this so metrics are right): `font = ImageFont.truetype(ttf, px)`; create an 'L' image of size (3*px, 3*px) filled 0; baseline y = 2*px, pen x = px; `ImageDraw.Draw(img).text((px, 2*px), ch, font=font, fill=255, anchor="ls")`; `bbox = img.getbbox()`; if bbox is None the glyph is empty; else crop to bbox, bx = bbox[0] - px, by = bbox[1] - 2*px.
+
+Format the byte array 16 values per line in decimal. Print a summary line per font to stdout: `NAME px=PX ascent=.. descent=.. bytes=..`. Exit 1 with a message on bad arguments.

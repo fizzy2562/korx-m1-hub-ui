@@ -1,0 +1,10 @@
+TASK: write ONE Python 3 script `fix_fonts.py` that reads a text file (path sys.argv[1]) and writes a patched copy to sys.argv[2]. Output format exactly:
+
+### FILE: fix_fonts.py
+<python code>
+
+Rules: open with newline='' for reading and writing (keep line endings untouched; do NOT normalise them). Perform these plain REPLACE-ALL substitutions (str.replace, every occurrence), in this order:
+  'gfx::small_font' -> 'small_font'
+  'gfx::mid_font'   -> 'mid_font'
+  'gfx::big_font'   -> 'big_font'
+Print, for each of the three substitutions, how many occurrences were replaced (use text.count before replacing), e.g. `small_font: 12`. Print "OK" at the end.

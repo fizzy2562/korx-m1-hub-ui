@@ -1,0 +1,59 @@
+TASK: write ONE C++17 header `m1ui_model.h` (header-only, `#pragma once`, no exceptions/RTTI/STL/heap; only <stdint.h>, <stdio.h>, <string.h>) containing the UI MODEL (state + logic, NO drawing) for a Korg M1 synth front panel. Output format exactly:
+
+### FILE: m1ui_model.h
+<code>
+
+The context file m1_params.h (given) describes every editable parameter of an M1 program (143-byte block) and combination (124-byte block): `m1::PageDef programPages(int&)`, `combiPages(int&)`, `effectParams(type)`, `paramStep`, `paramFormat`, `kFxNames`, `kProgFx`(=38), `kCombiFx`(=11). Include "m1_params.h". Put everything in `namespace m1ui`.
+
+=== Host interface (implemented elsewhere) ===
+```
+struct Host {
+    const uint8_t* (*programData)(int n);        // stored program n (143 bytes), 0..99
+    const uint8_t* (*combiData)(int n);          // stored combination n (124 bytes)
+    void (*playProgram)(const uint8_t* buf);     // engine plays from this PERSISTENT buffer
+    void (*playCombi)(const uint8_t* buf);
+    void (*refreshFx)(const uint8_t* fxBlock);   // effect section changed
+    bool (*hasProgram)(int n);                   // is this program available (has sound data)?
+    bool (*hasCombi)(int n);
+};
+```
+=== Model ===
+```
+constexpr int kMaxParams = 160, kMaxGroups = 40;
+struct Model {
+    const Host* host = nullptr;
+    uint8_t mode = 0;                 // 0 = Program, 1 = Combination
+    uint8_t program = 0, combi = 0;   // current numbers
+    uint8_t progEdit[143] = {0};      // the edit buffers the engine plays from
+    uint8_t combiEdit[124] = {0};
+    bool edited = false, comparing = false, shift = false;
+    m1::ParamDef params[kMaxParams];  // flattened parameters of the current mode
+    int nParams = 0;
+    char groupName[kMaxGroups][12];   // group titles
+    uint8_t groupFirst[kMaxGroups];   // index of the group's first param in params[]
+    int nGroups = 0;
+    int group = 0;                    // current group
+    int sub = 0;                      // index within the group of the first of the 4 shown params (multiple of 4)
+};
+```
+=== Functions (all `inline`, taking `Model& m`) ===
+- `void init(Model& m, const Host& h)`: store host pointer, select the first available program (selectProgram with that number; if none, 0).
+- `uint8_t* block(Model& m)` / `const uint8_t* block(const Model& m)`: current edit buffer (progEdit if mode 0 else combiEdit).
+- `void buildPages(Model& m)`: rebuild params/groups for the current mode, then clamp `group` to [0,nGroups-1] and `sub` to a valid multiple of 4. PORT of Pico's buildEdit, simplified (no padding, no Global/Kit): for each page `pg` in programPages (mode 0) or combiPages (mode 1): skip it if mode==0 && (pg.flags & m1::kPageDoubleOnly) && block[10] != 1; if (pg.flags & (m1::kPageFx1|m1::kPageFx2)): k = (flags & kPageFx1) ? 0 : 1; fxBase = mode==0 ? m1::kProgFx : m1::kCombiFx; type = block[fxBase + k]; group title = "FX<k+1> <kFxNames[type<34?type:33]>"; params = the 8 entries of `m1::effectParams(type)` (fp[0..7]), each added with offset adjusted by `fxBase + 9 + 8*k`; entries with a null `name` are skipped; continue to the next page. If (pg.flags & m1::kPageTimbre): for timbre tm=0..7: new group titled "Timbre <tm+1>", add all pg.params with offset + 11*tm; continue. Otherwise: new group titled pg.title, add all pg.params with null-name entries skipped. "Adding" a param means: copy the ParamDef into params[nParams] with `offset = (uint8_t)(p.offset + dOff)`; ignore when nParams >= kMaxParams or nGroups >= kMaxGroups. Group titles are copied with snprintf into groupName (11 chars max). A group with zero params must not be created (remove it / do not start it until the first param is added).
+- `int groupCount(const Model&)`, `int groupSize(const Model& m, int g)` (= next group's first - this first, or nParams - first for the last).
+- `const m1::ParamDef* slotParam(const Model& m, int slot)` (slot 0..3): returns &params[groupFirst[group] + sub + slot] if that index is inside the current group, else nullptr.
+- `void slotText(const Model& m, int slot, char* text, int n, float* norm, const char** label)`: if slotParam is null: text="", norm=-1, label="" ; else `m1::paramFormat(*p, block(m), text, n, norm)` and label = p->name.
+- `void selectProgram(Model& m, int n)`: clamp 0..99; program=n; memcpy progEdit from host->programData(n) (143 bytes); edited=comparing=false; host->playProgram(progEdit); if mode==0 buildPages.
+- `void selectCombi(Model& m, int n)`: same for combinations (124 bytes), host->playCombi(combiEdit); if mode==1 buildPages.
+- `void setMode(Model& m, int mode)`: set mode (0/1); comparing=false; play the matching edit buffer (playProgram / playCombi); group=0; sub=0; buildPages.
+- `void stepItem(Model& m, int dir)` (dir = +1/-1): in the current mode find the next number in that direction (wrapping 0..99, at most 100 tries) for which host->hasProgram / hasCombi is true and select it (selectProgram / selectCombi). If none, do nothing.
+- `void toggleCompare(Model& m)`: comparing = !comparing; the engine must play the STORED data while comparing: if comparing -> host->playProgram(host->programData(program)) (or playCombi(host->combiData(combi))) ; else host->playProgram(progEdit) (or playCombi(combiEdit)).
+- `void stepGroup(Model& m, int dir)`: group += dir with wrap around nGroups; sub = 0.
+- `void stepSub(Model& m, int dir)` (LEFT/RIGHT): sub += 4*dir; if sub >= groupSize(group): move to the next group (wrap), sub=0; if sub < 0: move to the previous group (wrap) and set sub to the last multiple of 4 inside it (((groupSize-1)/4)*4).
+- `void editSlot(Model& m, int slot, int delta)`: p = slotParam; if null return; if m.comparing, first set comparing=false and replay the edit buffer; `if (m1::paramStep(*p, block(m), delta)) edited = true;` and then apply the same side effects as the Pico controller: for mode 0: if (p->offset >= 38 && p->offset < 63) host->refreshFx(progEdit + 38); if (p->offset == 38 || p->offset == 39 || p->offset == 10) buildPages(m)  [keep group/sub clamped]. For mode 1: if (p->offset >= 11 && p->offset < 36) { host->refreshFx(combiEdit + 11); if (p->offset == 11 || p->offset == 12) buildPages(m);} else if (p->offset >= 10) host->playCombi(combiEdit).  NOTE: use `const m1::ParamDef pd = *p;` copy BEFORE calling buildPages because buildPages invalidates the pointer.
+- `void getName(const Model& m, char* out)`: out[11]; the 10 name characters are bytes 0..9 of the current block (program or combi, depending on mode, from the EDIT buffer); replace bytes < 32 or > 126 by a space, then trim trailing spaces, NUL-terminate.
+- `void event(Model& m, int type, int id, int down, float value)`: the panel event entry point. Event types: 3 = BUTTON, 4 = ENCODER (others ignored). 
+  BUTTON ids: F1=0 -> stepItem(-1); F2=1 -> stepItem(+1); F3=2 -> setMode(!mode); F4=3 -> toggleCompare; F5=4 -> stepGroup(-1); F6=5 -> stepGroup(+1); SHIFT=6 -> shift = (down != 0) (handle this one for both press and release); ENTER=9 -> setMode(!mode); K1..K6 = ids 10..15 -> if (id-10 < nGroups) { group = id-10; sub = 0; }; HOME=17 -> group=0, sub=0; LEFT=18 -> stepSub(-1); RIGHT=20 -> stepSub(+1). All buttons except SHIFT act only when down != 0.
+  ENCODER ids: 0..3 -> editSlot(slot=id, delta) with delta = sign(value) times (shift ? 4 : 1) (ignore value == 0); id 4 (A) and 6 (DATA) -> stepItem(sign(value)); id 5 (B) -> setMode(!mode) when value != 0.
+- `void captions(const Model& m, char out[25][8])` : fill 25 captions of 8 chars (NUL padded, use memset 0 then copy up to 7 chars): index 0..5 (F1..F6) = "PRG -","PRG +", mode==0 ? "COMBI" : "PROG", comparing ? "EDITED" : "COMPARE", "PAGE -", "PAGE +"; indices 10..15 (K1..K6) = first 7 chars of the title of group 0..5 (UPPERCASE) or empty if that group does not exist; everything else empty.
+Keep the code compact and complete; every function must compile as written. Do not use `new`, `malloc`, or any STL.

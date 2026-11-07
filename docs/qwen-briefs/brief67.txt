@@ -1,0 +1,52 @@
+TASK: write ONE Python 3 script `apply_fix.py` that patches TWO C++ header files using EXACT string replacements. Usage: `python apply_fix.py <view_in> <view_out> <model_in> <model_out>`. Output format exactly:
+
+### FILE: apply_fix.py
+<python code>
+
+Rules: define `rep(src, old, new, tag)` which asserts `src.count(old) == 1` (else print the tag and sys.exit(1)) and returns src.replace(old, new). Both files use CRLF line endings: open with newline='', do `text = text.replace('\r\n','\n')` after reading, apply edits on the LF-normalised text, convert back with `text.replace('\n','\r\n')` before writing; write with newline=''. Put each old/new string in a Python raw triple-quoted string r'''...''' written as exactly the text given (no extra leading/trailing newline). Print "OK 5" at the end.
+
+VIEW file edits:
+V1. old:
+            bool left = true;
+            while (true) {
+new:
+            bool left = true;
+            int fails = 0;
+            while (true) {
+V2. old:
+                if (!added) break;
+            }
+new:
+                if (added) fails = 0;
+                else if (++fails >= 2) break;
+            }
+
+MODEL file edits:
+M1. old:
+    selectProgram(m, first >= 0 ? first : 0);
+}
+new:
+    selectProgram(m, first >= 0 ? first : 0);
+    if (m.nGroups > 1) m.group = 1;
+}
+M2. old:
+    m.group = 0;
+    m.sub = 0;
+    buildPages(m);
+}
+new:
+    m.group = 0;
+    m.sub = 0;
+    buildPages(m);
+    if (m.nGroups > 1) m.group = 1;
+}
+M3. old:
+            case 17:
+                m.group = 0;
+                m.sub = 0;
+                break;
+new:
+            case 17:
+                m.group = (m.nGroups > 1) ? 1 : 0;
+                m.sub = 0;
+                break;

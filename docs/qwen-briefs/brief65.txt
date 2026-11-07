@@ -1,0 +1,124 @@
+TASK: write ONE Python 3 script `apply_ui.py` that reads a C++ source (path in sys.argv[1]) and writes a patched copy to sys.argv[2] using EXACT string replacements. Output format exactly:
+
+### FILE: apply_ui.py
+<python code>
+
+Rules: define `rep(src, old, new)` which asserts `src.count(old) == 1` (else print which edit number failed and sys.exit(1)) and returns src.replace(old, new). The input file uses CRLF line endings: open with newline='', do `text = text.replace('\r\n','\n')` right after reading, apply all edits on the LF-normalised text, convert back with `text.replace('\n','\r\n')` before writing; write with newline=''. Put each old/new string in a Python triple-quoted raw string (r'''...''') exactly as given (keep indentation exactly; strings start right after the opening quotes' first newline is NOT part of them -- write them as r'''text''' with no leading/trailing newline inside). Apply the 9 edits in order and finally print "OK 9".
+
+EDIT 1. old:
+#include "lite_sets.h"
+new:
+#include "lite_sets.h"
+#include "gfx.h"
+#include "m1_params.h"
+#include "m1ui_model.h"
+#include "m1ui_view.h"
+
+EDIT 2. old:
+int g_mode = 0;
+int g_index = 0;
+double g_sr = 48000.0;
+new:
+int g_mode = 0;
+int g_index = 0;
+double g_sr = 48000.0;
+
+static bool liteHas(int mode, int idx);
+const uint8_t* uiProgramData(int n) { return m1rom::kPrograms + 143 * n; }
+const uint8_t* uiCombiData(int n) { return m1rom::kCombis + 124 * n; }
+void uiPlayProgram(const uint8_t* b) { g_eng.playProgram(b); }
+void uiPlayCombi(const uint8_t* b) { g_eng.playCombi(b); }
+void uiRefreshFx(const uint8_t* b) { g_eng.refreshEffects(b); }
+bool uiHasProgram(int n) { return liteHas(0, n); }
+bool uiHasCombi(int n) { return liteHas(1, n); }
+const m1ui::Host g_uiHost = { uiProgramData, uiCombiData, uiPlayProgram, uiPlayCombi, uiRefreshFx, uiHasProgram, uiHasCombi };
+m1ui::Model g_ui;
+float g_lvlL = 0.0f, g_lvlR = 0.0f;
+
+EDIT 3. old:
+        g_index = liteSnap(g_mode, p);
+        if (g_mode == 0) g_eng.selectProgram(g_index);
+        else g_eng.selectCombi(g_index);
+    } else if (status == 0xD0) {
+new:
+        int q = liteSnap(g_ui.mode, p);
+        if (g_ui.mode == 0) m1ui::selectProgram(g_ui, q);
+        else m1ui::selectCombi(g_ui, q);
+    } else if (status == 0xD0) {
+
+EDIT 4. old:
+    g_eng.selectProgram(kLiteProgs[0]);
+new:
+    m1::setNameSources(m1rom::kMultisoundNames, m1rom::kDrumNames, m1rom::kPrograms);
+    m1ui::init(g_ui, g_uiHost);
+    g_lvlL = 0.0f;
+    g_lvlR = 0.0f;
+
+EDIT 5. old:
+    renderOutput(outL, outR, n);
+}
+new:
+    renderOutput(outL, outR, n);
+    float pl = 0.0f, pr = 0.0f;
+    for (uint32_t i = 0; i < n; ++i) {
+        float a = outL[i] < 0.0f ? -outL[i] : outL[i];
+        float b = outR[i] < 0.0f ? -outR[i] : outR[i];
+        if (a > pl) pl = a;
+        if (b > pr) pr = b;
+    }
+    g_lvlL = pl > g_lvlL ? pl : g_lvlL * 0.92f;
+    g_lvlR = pr > g_lvlR ? pr : g_lvlR * 0.92f;
+}
+
+EDIT 6. old:
+    } else if (type == 4) {
+        if (id == 4 || id == 6) {
+new:
+    } else if (type == 3 || type == 4) {
+        m1ui::event(g_ui, (int)type, (int)id, (int)down, (float)(int32_t)value);
+    } else if (type == 99) {
+        if (id == 4 || id == 6) {
+
+EDIT 7. old:
+__attribute__((export_name("vibe_wasm_draw")))
+uint32_t vibe_wasm_draw() {
+    static uint16_t fb[480 * 320];
+new:
+__attribute__((export_name("vibe_wasm_draw")))
+uint32_t vibe_wasm_draw() {
+    m1ui::Meters mt;
+    mt.l = g_lvlL;
+    mt.r = g_lvlR;
+    mt.voices = g_eng.activeVoices();
+    m1ui::draw(g_ui, mt);
+    return (uint32_t)(uintptr_t)gfx::fb;
+}
+
+static uint32_t old_draw_unused() {
+    static uint16_t fb[480 * 320];
+
+EDIT 8. old:
+    for (int i = 0; i < 384; ++i) leds[i] = 0;
+new:
+    m1ui::fillLeds(g_ui, leds);
+
+EDIT 9. This edit performs THREE replacements in one go (apply them in this order, each with rep()):
+  9a. old:
+__attribute__((export_name("korx_name_ptr")))
+  new:
+__attribute__((export_name("vibe_wasm_labels")))
+uint32_t vibe_wasm_labels() {
+    static char caps[25][8];
+    m1ui::captions(g_ui, caps);
+    return (uint32_t)(uintptr_t)caps;
+}
+
+__attribute__((export_name("korx_name_ptr")))
+  9b. old:
+    return g_mode;
+  new:
+    return g_ui.mode;
+  9c. old:
+    return g_index;
+  new:
+    return g_ui.mode ? g_ui.combi : g_ui.program;

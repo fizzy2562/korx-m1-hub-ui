@@ -1,0 +1,21 @@
+TASK: write ONE C++17 file for a 480x320 RGB565 UI renderer that compiles to WebAssembly (no exceptions, no RTTI, no STL containers, no heap allocation; only <stdint.h> and <math.h>). Output format exactly:
+
+### FILE: gfx_test.cpp
+<code>
+
+
+The header gfx.h already exists (given as a context file; do NOT output it). It uses fonts small_font/big_font from font_data.h (also included by gfx.h). Include "gfx.h" only.
+
+=== gfx_test.cpp ===
+
+A WebAssembly "firmware" that only draws a test card. It must define these exported C functions (use `extern "C" __attribute__((export_name("NAME")))` on each): 
+ int vibe_sdk_version() { return 5; }
+ void vibe_wasm_init(unsigned sr) {}
+ float* vibe_wasm_io()  -> pointer to a static float array of 1024 floats (zeros)
+ void vibe_wasm_audio(int n, int flags) {}
+ void vibe_wasm_event(int type,int id,int down,float value,int midi) {}
+ unsigned vibe_wasm_draw()  -> draws the test card into gfx::fb and returns `(unsigned)(uintptr_t)gfx::fb`
+ unsigned vibe_wasm_leds() -> pointer to a static 384-byte zero array
+The test card (background dark navy rgb(11,17,25)) must show, using the primitives: (1) the line "The quick brown fox 0123456789" in small_font (white) at the top-left, baselines at y=18; (2) "PROGRAM 42 Piano16" in big_font in violet rgb(183,148,246) at y=56; (3) a row of three rounded rects (w 90,h 30,r 8) in rgb(22,32,48) with small_font labels centred inside, one of them filled violet with dark text; (4) two arcs: radius 40 thickness 5 centred (80,150): track 135..405 degrees in rgb(31,43,61), value 135..300 in rgb(77,163,232); and at centre (200,150) the same track with value 135..200; draw a filled circle radius 31 rgb(27,38,56) inside each; plus a 1-px white pointer line from the centre to the arc value angle (compute with sinf/cosf, angle clockwise from 12 o'clock, radius 28); (5) big_font text "185Hz" centred under the first knob at baseline y=215, and "22" under the second; (6) all printable ASCII 32..126 in small_font in two rows near the bottom (y=262 and y=282) in light grey so glyph shapes can be checked; (7) a half-transparent blendRect strip near the right side.
+
+Keep the file SHORT and finish it completely (every brace closed).

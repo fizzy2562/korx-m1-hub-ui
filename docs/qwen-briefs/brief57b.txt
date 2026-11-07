@@ -1,0 +1,55 @@
+TASK: write ONE Python 3 script `apply_lite.py` that reads `hub_adapter.cpp` (given as a context file) from sys.argv[1] and writes a modified copy to sys.argv[2], using EXACT string replacements. Do not output the C++ file itself. Output format:
+
+### FILE: apply_lite.py
+<python code>
+
+CONTEXT: The C++ file is a synth adapter. A header `lite_sets.h` (also given) defines kLiteProgs[]/kLiteProgCount and kLiteCombis[]/kLiteCombiCount = the sorted lists of program/combi indices (0..99) that actually have sound data. Goal: the adapter must only ever select members of those lists (mode 0 = programs uses kLiteProgs, mode 1 = combis uses kLiteCombis).
+
+IMPORTANT: the input file uses CRLF (\r\n) line endings. Read the file in binary-safe way (open(path,'r',newline='')), immediately do `text = text.replace('\r\n','\n')`, apply ALL edits on the LF-normalised text (so the multi-line snippets below with \n work), and at the end convert back with `text.replace('\n','\r\n')` and write with newline=''.
+
+Write a helper `rep(src, old, new)` that asserts `src.count(old) == 1` (print which snippet failed and sys.exit(1) otherwise) and returns src.replace(old, new). Apply these edits in order, all with rep():
+
+1. Replace `#include "m1_rom_tables.h"` with `#include "m1_rom_tables.h"\n#include "lite_sets.h"`.
+2. Insert, immediately BEFORE the exact line `void handleMidi(uint32_t midi) {`, these C++ helpers (put them inside the same extern "C" region/namespace as handleMidi is, i.e. just plain functions placed right before it, marked `static`):
+```
+static bool liteHas(int mode, int idx) {
+    const int* a = mode ? kLiteCombis : kLiteProgs;
+    int n = mode ? kLiteCombiCount : kLiteProgCount;
+    for (int i = 0; i < n; ++i) if (a[i] == idx) return true;
+    return false;
+}
+// next member strictly after idx going in direction dir (+1/-1), wrapping 0..99
+static int liteStep(int mode, int idx, int dir) {
+    for (int k = 1; k <= 100; ++k) {
+        int c = ((idx + dir * k) % 100 + 100) % 100;
+        if (liteHas(mode, c)) return c;
+    }
+    return idx;
+}
+// idx itself if a member, else the next member upward (wrapping)
+static int liteSnap(int mode, int idx) {
+    if (liteHas(mode, idx)) return idx;
+    return liteStep(mode, idx, 1);
+}
+```
+3. In vibe_wasm_init: replace the single line `g_eng.selectProgram(0);` with `g_eng.selectProgram(kLiteProgs[0]);` (unique). Then replace the exact string `    g_index = 0;\n` (FOUR leading spaces, then g_index = 0; then newline -- NOT the global declaration `int g_index = 0;` which must stay unchanged) with `    g_index = kLiteProgs[0];\n`. Use rep() with the leading spaces included so the count is exactly 1; do not use any fallback logic.
+4. In the program-change branch of handleMidi replace the exact line `g_index = p;` with `g_index = liteSnap(g_mode, p);`.
+5. In the encoder branch replace the exact four lines
+```
+            int delta = (int)value;
+            g_index += delta;
+            if (g_index < 0) g_index += 100;
+            if (g_index > 99) g_index -= 100;
+```
+with
+```
+            int delta = (int)value;
+            int dir = delta < 0 ? -1 : 1;
+            int steps = delta < 0 ? -delta : delta;
+            if (steps < 1) steps = 1;
+            if (steps > 8) steps = 8;
+            for (int s = 0; s < steps; ++s) g_index = liteStep(g_mode, g_index, dir);
+```
+6. In the mode-toggle branch replace the exact line `g_mode = g_mode ? 0 : 1;` with `g_mode = g_mode ? 0 : 1;\n            g_index = liteSnap(g_mode, g_index);`.
+
+At the end print "OK" and the number of replacements done. Keep the script short and simple. Preserve file encoding/line endings (open with newline="" and read/write as text utf-8).

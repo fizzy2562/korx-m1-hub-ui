@@ -1,0 +1,33 @@
+TASK: write ONE Python 3 script `apply_abi.py` (usage: `python apply_abi.py <in.cpp> <out.cpp>`) that patches a C++ file with EXACT single-occurrence string replacements. Output format exactly:
+
+### FILE: apply_abi.py
+<python code>
+
+Rules: define `rep(src, old, new)` asserting `src.count(old) == 1` (else print the old text and sys.exit(1)). The file uses CRLF: open with newline='', `text = text.replace('\r\n','\n')` after reading, apply the edits to the LF text, then `text.replace('\n','\r\n')` before writing (write with newline=''). Use raw triple-quoted strings; each old/new string is exactly what is shown (no leading/trailing newline inside the quotes). Apply these 5 edits in order, then print "OK 5":
+
+1. old:
+void vibe_wasm_init(uint32_t sr) {
+    if (sr < 8000) sr = 8000;
+    if (sr > 192000) sr = 192000;
+new:
+void vibe_wasm_init(float sr) {
+    if (sr < 8000.0f) sr = 8000.0f;
+    if (sr > 192000.0f) sr = 192000.0f;
+2. old:
+void vibe_wasm_event(uint32_t type, uint32_t id, uint32_t down, uint32_t value, uint32_t midi) {
+new:
+void vibe_wasm_event(uint32_t type, uint32_t id, uint32_t down, float value, uint32_t midi) {
+3. old:
+            int vel = value > 0 ? (int)value : 100;
+new:
+            int vel = value > 0.0f ? (int)(value * 127.0f + 0.5f) : 100;
+            if (vel < 1) vel = 1;
+            if (vel > 127) vel = 127;
+4. old:
+        m1ui::event(g_ui, (int)type, (int)id, (int)down, (float)(int32_t)value);
+new:
+        m1ui::event(g_ui, (int)type, (int)id, (int)down, value);
+5. old:
+        g_eng.damper(0, value >= 64);
+new:
+        g_eng.damper(0, value >= 0.5f && (value <= 1.0f || value >= 64.0f));
