@@ -1,0 +1,65 @@
+TASK: write TWO C++17 files that build ORIGINAL starter patches (programs and combinations) for a Korg-M1-style synth engine from byte offsets only. No STL, no heap, only <stdint.h>, <string.h>. Output format exactly:
+
+### FILE: m1free_patches.h
+<code>
+
+### FILE: patches_test.cpp
+<code>
+
+=== m1free_patches.h (header-only, `#pragma once`, namespace m1free, everything inline) ===
+```
+struct PatchSet {
+    uint8_t programs[100 * 143];
+    uint8_t combis[100 * 124];
+    uint8_t kits[4 * 210];
+    uint8_t global[21];
+};
+inline void generatePatches(PatchSet& p);   // memset(&p, 0, sizeof p) first, then fill programs 0..7 and combinations 0..3
+```
+Use small helpers: `inline void put(uint8_t* blk, int off, int v)` (stores `(uint8_t)v`, so negative values become two's complement) and `inline void setName(uint8_t* blk, const char* s)` (writes 10 ASCII characters at bytes 0..9, padded with spaces, truncated at 10).
+
+PROGRAM block (143 bytes) byte offsets (all unsigned unless noted; values outside the stated range are forbidden):
+ 0..9 name; 10 osc mode (0 = Single); 11 bit0 assign (0 = Poly), bit1 hold (0);
+ 12 OSC1 multisound (0..99); 13 OSC1 octave (signed: 0 = 8', -1 = 16', 1 = 4');
+ 86 OSC1 level (0..99);
+ pitch EG 1 = bytes 63..70 (leave 0 = neutral);
+ VDF 1: byte 71 cutoff (0..99), byte 72 keyboard centre note (60), byte 73 keyboard track (signed, 0), byte 74 EG intensity (0..99, use 0), bytes 75..77 = 0;
+ VDF EG 1 = bytes 78..85 (leave 0);
+ VDA 1: byte 87 keyboard centre note (60), byte 88 keyboard track (signed, 0), byte 89 velocity sense (signed, use 20), bytes 90, 91 = 0;
+ VDA EG 1: byte 92 attack time, 93 attack level (use 99), 94 decay time, 95 break point (min(99, sustain + 10)), 96 slope time (use 40), 97 sustain level, 98 release time (all 0..99);
+ pitch MG bytes 19..22 and VDF MG bytes 23..26: leave 0 (no modulation); aftertouch bytes 27..31: 0;
+ joystick: byte 32 pitch-bend range in semitones (signed, use 2), bytes 33..37 = 0;
+ effects: byte 38 = 33 and byte 39 = 33 (33 = "No Effect" for both effects); bytes 40..62 = 0.
+ All other bytes stay 0.
+Write `inline void makeProgram(uint8_t* blk, const char* name, int wave, int octave, int cutoff, int atk, int dcy, int sus, int rel)` that fills a block (starting from all zeros) using exactly these offsets, with VDF1 EG intensity 0 and OSC1 level 99.
+Generate programs 0..7, using the multisound index = wave:
+ 0 "Sine Pad"    wave 0 oct 0  cutoff 99 atk 25 dcy 40 sus 85 rel 40
+ 1 "Saw Lead"    wave 1 oct 0  cutoff 80 atk 2  dcy 30 sus 80 rel 20
+ 2 "Square Bass" wave 2 oct -1 cutoff 55 atk 0  dcy 25 sus 70 rel 15
+ 3 "Tri Bell"    wave 3 oct 0  cutoff 99 atk 0  dcy 45 sus 10 rel 40
+ 4 "Organ 1"     wave 4 oct 0  cutoff 99 atk 0  dcy 0  sus 99 rel 5
+ 5 "Pulse Brass" wave 5 oct 0  cutoff 65 atk 15 dcy 25 sus 85 rel 20
+ 6 "Soft Saw"    wave 6 oct 0  cutoff 70 atk 20 dcy 35 sus 80 rel 30
+ 7 "Noise Wind"  wave 7 oct 0  cutoff 50 atk 40 dcy 60 sus 60 rel 50
+Program n lives at `p.programs + 143*n`. Programs 8..99 stay all zero.
+
+COMBINATION block (124 bytes): bytes 0..9 name; byte 10 combination type (0); bytes 11 and 12 = 33 and 33 (No Effect); bytes 13..35 = 0; then 8 timbres of 11 bytes each starting at byte 36 + 11*t, with per-timbre bytes: +0 program number (0..99), +1 level (0..99), +2 transpose (signed), +3 detune (signed), +4 pan (5 = centre), +5 key top (127), +6 key bottom (0), +7 velocity top (127), +8 velocity bottom (1), +9 flags (0), +10: 0x00 for a timbre that is IN USE (bit 4 CLEAR means on; MIDI channel field 0), or 0x10 for an unused timbre (bit 4 set means off).
+Unused timbres: program 0, level 0, pan 5, key top 127, key bottom 0, vel top 127, vel bottom 1, byte +10 = 0x10.
+Generate combinations 0..3 (combination n lives at `p.combis + 124*n`), the rest stay zero:
+ 0 "Sine+Saw"   : timbre 0 = program 0 level 99; timbre 1 = program 1 level 70 detune +7; others unused.
+ 1 "Bass+Lead"  : timbre 0 = program 2 level 99 key top 59 (keys 0..59); timbre 1 = program 1 level 90 key bottom 60 (keys 60..127); others unused.
+ 2 "Organ Duo"  : timbre 0 = program 4 level 99; timbre 1 = program 4 level 60 transpose 12; others unused.
+ 3 "Wind Pad"   : timbre 0 = program 7 level 80; timbre 1 = program 0 level 90; timbre 2 = program 6 level 60 detune -6; others unused.
+kits and global stay all zero.
+
+=== patches_test.cpp ===
+Standalone program (`main`) that includes "m1free_patches.h", builds a static PatchSet, calls generatePatches and prints `PASS <name>` / `FAIL <name> <detail>`, returning non-zero if any FAIL:
+ - program 0 name bytes are "Sine Pad  " (10 chars), byte 12 == 0, byte 86 == 99, byte 38 == 33, byte 39 == 33, byte 97 == 85;
+ - program 2 byte 13 == 0xFF (octave -1), byte 12 == 2, byte 71 == 55;
+ - for programs 0..7: byte 10 == 0, byte 11 == 0, byte 93 == 99, byte 74 == 0, byte 32 == 2, byte 95 == min(99, byte97 + 10), byte 12 == n;
+ - programs 8..99 are entirely zero (all 143 bytes);
+ - combination 0: name "Sine+Saw  ", byte 11 == 33, timbre 0 at byte 36: program 0, level 99, byte 46 == 0x00; timbre 1 at byte 47: program 1, level 70, detune byte (offset 47+3) == 7, byte 57 == 0x00; timbre 2 at byte 58: byte 68 == 0x10;
+ - combination 1 timbre 0 key top (byte 36+5) == 59 and timbre 1 key bottom (byte 47+6) == 60;
+ - combination 2 timbre 1 transpose (byte 47+2) == 12; combination 3 timbre 2 detune (byte 58+3) == 0xFA (-6);
+ - combinations 4..99 are entirely zero; kits and global are entirely zero.
+Compile-clean under `g++ -std=c++17 -Wall -Wextra`; no unused variables or sign-compare warnings; every variable declared once per scope.

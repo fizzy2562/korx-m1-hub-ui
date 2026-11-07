@@ -1,0 +1,54 @@
+TASK: write TWO C++17 files that generate, from FORMULAS ONLY (no ROM data of any kind), the lookup tables a Korg-M1-style synth engine needs. No STL, no heap, only <stdint.h>, <math.h>. Output format exactly:
+
+### FILE: m1free_tables.h
+<code>
+
+### FILE: tables_test.cpp
+<code>
+
+=== m1free_tables.h (header-only, `#pragma once`, everything `inline`, namespace m1free) ===
+```
+struct Tables {
+    uint16_t pitchS[153], pitchF[128];
+    uint8_t  kernel[4096 * 8];
+    uint16_t vdf1k[4096], vdf2k[4096];
+    int16_t  vdf1t0[4096], vdf2t0[4096];
+    uint16_t egRise[256], egFall[256], velCurve[256];
+    uint16_t mgFreq[100], mgDelay[100], mgIntP[100], mgIntF[100];
+    uint16_t panReg[14], pan101[101], delayStart[100];
+    int8_t   scale[12];
+};
+inline void generateTables(Tables& t);   // fills EVERY entry of every array
+```
+Use `double` and `pow/exp/sin/cos/sqrt/log` internally; round with `(int)floor(x + 0.5)`; clamp to the destination type's range. Use a helper `static inline long rnd(double x)`.
+
+Formulas (each is what the engine expects; do not change the semantics):
+
+1. pitchS[hi], hi = 0..152: n = hi - 128 (semitones relative to the sample root). pitchS = round(4096 * 2^(n/12)), clamped to 0..65535.
+2. pitchF[lo], lo = 0..127: pitchF = round(65536 * (2^(lo/1536.0) - 1)), clamped to 0..65535. (The engine computes step = S + ((S * F) >> 16).)
+3. kernel: an 8-tap polyphase interpolator, 4096 phases, 8 bytes per phase at index `phase*8 + lane`. For phase p (0..4095) let f = p / 4096.0. Lane l (0..7) has distance d_l = (4 - l) - f from the interpolation point. Raw weight h_l = sinc(d_l) * window(d_l) where sinc(x) = (x==0 ? 1 : sin(pi x)/(pi x)) and window(d) = 0.5 * (1 + cos(pi * d / 4.5)) for |d| < 4.5, else 0. The engine sums `mul[l] * w[l] * sample` with mul = {1,1,2,8,8,2,1,1} and divides by 1226, so scale: the EFFECTIVE interpolation weight of lane l is mul[l]*w[l]/1226 and the effective weights must sum to 1, therefore w_real[l] = (h_l / H) * 1226 / mul[l] where H = the sum over all 8 lanes of h_l (NOT a sum weighted by mul). Example: at phase 0, h_4 = 1 and the others are about 0, so w_4 = 1226/8 = 153.25 and the others are about 0; at phase 2048 (f = 0.5) lanes 3 and 4 each carry about 0.62 of the weight so each is about 95. Round to integers. Lanes 3 and 4 are UNSIGNED bytes (clamp 0..255); lanes 0,1,2,5,6,7 are SIGNED int8 stored as uint8_t two's complement (clamp -128..127). Then CORRECT THE DC GAIN: compute R = 1226 - sum(mul[l]*w[l]) (integers). Fix it first with the larger of lanes 3/4 by R/8 (integer division, truncating toward zero), recompute R, then with lane 2 or 5 by R/2, then put the remaining residual (a small integer) onto lane 0 or lane 7 (mul 1) so that the final sum is EXACTLY 1226 for every phase whenever the clamps allow. (Lane 3/4 weights must remain in 0..255.)
+4. mgFreq[v], v=0..99: v==0 ? 0 : round(1.64 * v * v), clamp 0..65535.
+5. mgDelay[v]: v==0 ? 65535 : step = round(32768.0 / (T / 0.0208)) where T = 0.05 * pow(100.0, v/99.0) (seconds); clamp 1..65535 (and at least 1).
+6. mgIntP[v] and mgIntF[v] (identical): round(8191.0 * (v/99.0)^2), clamp 0..8191.
+7. egRise[idx], idx=0..255: N = pow(1500.0, idx/255.0) (number of 20.8 ms updates); egRise = round(65500.0 / N), clamp 1..65535.
+8. egFall[idx]: same N; m = pow(0.004, 1.0 / N); egFall = round(65536.0 * (1.0 - m)), clamp 1..65535.
+9. velCurve[i], i=0..255: i >= 252 ? 65535 : round(65535.0 * pow(i / 252.0, 1.6)).
+10. panReg[code], code 0..13, a 16-bit word: A in bits 0..5 (0..63), B in bits 6..11 (0..63), C is bit 12, D is bit 13. Codes 0..10: A = round(63*cos(code*pi/20)), B = round(63*sin(code*pi/20)) (code 0 = A only, code 10 = B only, 5 = centre). Code 11 = bit 12 only (C), code 12 = bits 12 and 13 (C+D), code 13 = bit 13 only (D); A=B=0 for those.
+11. pan101[i], i=0..100 (Q9 balance curve): x = i/100.0; value = round(512.0 * (3x^2 - 2x^3)).
+12. delayStart[v], v=0..99: round(0.08 * v * v), clamp 0..65535.
+13. scale[k], k=0..11: just-intonation-major offset from equal temperament in 1/128 semitone: justCents[] = {0, 111.731, 203.910, 315.641, 386.314, 498.045, 590.224, 701.955, 813.686, 884.359, 1017.596, 1088.269}; scale[k] = round((justCents[k] - 100.0*k) * 1.28), as int8.
+14. VDF tables, for i = 0..4095: reg = 2*i + 1 (cutoff register value 1..8191); fc = 20.0 * pow(2.0, 10.0 * reg / 8191.0) (Hz); kp = 1.0 - exp(-2.0 * pi * fc / 62500.0), clamp to [0, 1]; kt = min(kp, 0.97).
+   vdf2k[i] = round(8192 * kp), clamp 0..8192. vdf1k[i] = round(8192 * 0.707 * kp), clamp 0..8192.
+   vdf2t0[i] = round(8192 * (2*kt - 1)). vdf1t0[i] = round(8192 * (2*min(0.707*kp, 0.97) - 1)). (int16.)
+
+=== tables_test.cpp ===
+A standalone program (`main`) that includes "m1free_tables.h", allocates a static Tables, calls generateTables, and checks, printing `PASS <name>` or `FAIL <name> <detail>` per check, returning non-zero if any FAIL:
+ - pitchS[128] == 4096; pitchS[140] within 1 of 8192; pitchS[116] within 1 of 2048; pitchF[0] == 0; pitchF[127] within 2 of round(65536*(2^(127/1536)-1)).
+ - For EVERY phase 0..4095 the DC sum `sum_l mul[l]*w[l]` equals 1226 exactly (report the number of phases that do not, and fail if more than 0), with lanes 3,4 as unsigned and the rest as signed bytes; also check at phase 0 that lane 4 is the largest lane and lanes 3 is within 3 of 0; at phase 2048 lanes 3 and 4 are within 2 of each other.
+ - mgFreq[0]==0, mgFreq[99]==16074 (within 1), mgDelay[0]==65535.
+ - egRise strictly non-increasing in idx; egFall non-increasing; egRise[0] >= 65000.
+ - velCurve[252]==65535, velCurve[255]==65535, velCurve strictly non-decreasing up to 252, velCurve[0]==0.
+ - panReg[0] == 63; panReg[5] has A == B within 1; panReg[10] has A == 0 and B == 63; panReg[11] == 0x1000; panReg[12] == 0x3000; panReg[13] == 0x2000.
+ - pan101[0]==0, pan101[100]==512, pan101[50]==256.
+ - scale[4] within 1 of -18; scale[0]==0.
+ - vdf2k non-decreasing in i, vdf2k[4095] >= 7000, vdf2k[0] <= 20; vdf1k[i] <= vdf2k[i] for all i; |vdf2t0[i]| <= 8192 for all i.

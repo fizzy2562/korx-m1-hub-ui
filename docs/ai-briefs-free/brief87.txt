@@ -1,0 +1,6 @@
+TASK: write ONE Python 3 script `apply_fix.py` (usage: `python apply_fix.py <header_in> <header_out> <test_in> <test_out>`) that does a plain REPLACE-ALL of the text `8192` with `4096` in two text files. Output format exactly:
+
+### FILE: apply_fix.py
+<python code>
+
+Rules: open every file with newline='' for reading and writing (do NOT change line endings). For each file print `<file role>: <count of occurrences replaced>` (use text.count('8192') before replacing), and exit with code 1 with a message if the count in the header is not exactly 2 or the count in the test is not exactly 2. Print "OK" at the end.

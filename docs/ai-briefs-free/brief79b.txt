@@ -1,0 +1,60 @@
+TASK: write TWO C++17 files: a generated, ROM-free synthetic sample set for a Korg-M1-style sampler engine, and a test. No STL, no heap, only <stdint.h>, <string.h>, <stdio.h>, <math.h> and the engine header. Output format exactly:
+
+### FILE: m1free_samples.h
+<code>
+
+### FILE: samples_test.cpp
+<code>
+
+The engine header `#include "m1_engine/m1_engine.h"` defines (namespace m1) exactly:
+```
+struct Split { uint32_t start, loop, end; int16_t tune128; uint8_t top; uint8_t pan; uint8_t root; uint8_t flags; int8_t tune; int8_t level; int8_t cutoff; int8_t decay; };
+struct Multisound { uint16_t first; uint8_t count; uint8_t dwgs; char name[11]; };
+struct DrumSound { uint32_t start, loop, end; int16_t tune128; uint8_t flags; };
+```
+How the engine uses a split: it plays PCM words starting at address `start`; the sample position starts at 0 relative to `start`; for a looped split the loop is the words [loop, end) (period = end - loop) and the word AT `end` is not part of the loop; taps before `start` and after `end` are read from the PCM array, so the PCM must hold sensible padding there (the 8-tap interpolator reads up to 3 words before and 4 words after). `flags` bit 0 = loop on, bit 1 = "NT" (no transposition). `top` is the highest key the split covers; `root` is the root key; `tune128` is added to the root in 1/128 semitone; `pan` 0..13 (5 = centre); `tune`, `level`, `cutoff`, `decay` are signed trims (use 0).
+
+=== m1free_samples.h (header-only, `#pragma once`, namespace m1free, everything inline) ===
+Constants: `kCycle = 239` (words in one loop), `kPad = 8`, `kWaves = 8`, `kVariants = 4`, `kWaveStride = kCycle + 2*kPad` (255), `kDrumLen = 2400`. Each waveform has FOUR variants (v = 0..3) that hold 2, 4, 8 and 16 periods of the waveform in the 239-word loop (`cycles[v] = {2, 4, 8, 16}`), so the same waveform can be played at higher pitch without exceeding the engine's playback step limit. Root keys `roots[v] = {60, 72, 84, 96}`; highest keys covered `tops[v] = {71, 83, 95, 127}`.
+```
+struct SampleSet {
+    int16_t pcm[kWaves * kVariants * kWaveStride + kDrumLen + 2 * kPad];
+    m1::Multisound ms[100];
+    m1::Split splits[400];
+    m1::DrumSound drums[2];            // index 0 unused (all zero); index 1 = a one-shot noise hit
+    char msNameBuf[100][12];
+    char drumNameBuf[44][12];
+    const char* msNames[100];
+    const char* drumNames[44];
+    uint32_t pcmWords;                 // number of valid words in pcm[]
+};
+inline void generateSamples(SampleSet& s);
+```
+generateSamples must zero the whole struct first (memset), then:
+1. Waves. For wave w (0..7) and variant v (0..3) the region starts at `base = (w*kVariants + v) * kWaveStride`; the cycle occupies words base+kPad .. base+kPad+kCycle-1 (so the split `start` = base + kPad). The cycle holds `cycles[v]` periods of the waveform: phase(i) = 2*pi*cycles[v]*i/kCycle for i = 0..kCycle-1. BAND-LIMIT per variant: every harmonic sum below uses only harmonics h <= hmaxV where hmaxV = min(the listed maximum, (kCycle / cycles[v]) / 2 - 1) using integer division (so variant 0 allows at most 58, variant 1 at most 28, variant 2 at most 13, variant 3 at most 6). For the Organ wave drop harmonics above hmaxV; for the Sine wave nothing changes. The words before the cycle (base .. base+kPad-1) are copies of the LAST kPad words of the cycle (so the signal continues backwards periodically); the kPad words after the cycle (base+kPad+kCycle .. base+kWaveStride-1) are copies of the FIRST kPad words of the cycle. Band-limited definitions (use double; h = harmonic number, ph = phase(i)):
+   0 "Sine": sin(ph)
+   1 "Saw": sum h=1..24 of ((h odd ? +1 : -1) / h) * sin(h*ph)
+   2 "Square": sum odd h=1..25 of sin(h*ph)/h
+   3 "Triangle": sum odd h=1..25 of (((h-1)/2 odd) ? -1 : +1) * sin(h*ph)/(h*h)
+   4 "Organ": harmonics 1,2,3,4,6,8 with amplitudes 1.0, 0.8, 0.6, 0.4, 0.25, 0.15: sum amp*sin(h*ph)
+   5 "Pulse25": sum h=1..24 of (sin(h*pi*0.25)/h) * cos(h*(ph - pi*0.25))
+   6 "SoftSaw": sum h=1..8 of ((h odd ? +1 : -1) / h) * sin(h*ph)
+   7 "Noise": a deterministic pseudo-random sequence: x = 12345; each sample x = x*1103515245 + 12345 (uint32 wrap); value = ((int)((x >> 16) & 0x7FFF) - 16384) / 16384.0
+   Normalise every region so its peak absolute value over the cycle is exactly 8192 (as int16, rounded). 
+2. Drum: region starts at `dbase = kWaves*kVariants*kWaveStride + kPad`; kDrumLen words of decaying noise: value = 8192 * exp(-i/500.0) * noise(i) where noise uses the same LCG (seed 777) and the range -1..1; the kPad words before and after are zero. pcmWords = kWaves*kVariants*kWaveStride + kDrumLen + 2*kPad.
+3. Multisounds: for m = 0..99, wave = m % 8. `ms[m].first = m*4; count = 4; dwgs = 0`. For v = 0..3: splits[m*4+v]: start = ((m%8)*kVariants + v)*kWaveStride + kPad; loop = start; end = start + kCycle; tune128 = 3; top = tops[v]; pan = 5; root = roots[v]; flags = 1 (loop on, not NT); tune = level = cutoff = decay = 0. Names: m < 8 -> the wave names above ("Sine","Saw","Square","Triangle","Organ","Pulse25","SoftSaw","Noise"); m >= 8 -> snprintf "Wave %02d" (m). Copy names into msNameBuf[m] (NUL terminated, max 11 chars), set ms[m].name to the same text, and msNames[m] = msNameBuf[m].
+4. drums[1]: start = dbase, loop = dbase, end = dbase + kDrumLen, tune128 = 3, flags = 0 (one-shot). drumNameBuf[0] = "Noise Hit"; drumNameBuf[i] = "Drum %02d" (i+1) for i = 1..43; drumNames[i] = drumNameBuf[i].
+
+=== samples_test.cpp ===
+A standalone program (main) that includes "m1free_samples.h", makes a static SampleSet, calls generateSamples, and prints `PASS <name>` / `FAIL <name> <detail>` for each check, returning non-zero on any FAIL:
+ - For every m in 0..99: ms[m].count == 4, ms[m].first == 4*m; and for v in 0..3 with sp = splits[ms[m].first + v]: sp.end - sp.start == 239, sp.loop == sp.start, sp.top == tops[v], sp.root == roots[v], sp.flags == 1, sp.tune128 == 3, sp.start >= 8, sp.end + 4 <= pcmWords.
+ - For every wave w and variant v: the 8 words before the cycle equal the last 8 words of the cycle, and the 8 words after equal the first 8.
+ - wave 0 (sine), every variant v: the peak |pcm| over its cycle is exactly 8192 and pcm[start + 0] is within 1 of 0; for i in 0..238 sample i is within 2 of 8192*sin(2*pi*cycles[v]*i/239).
+ - waves 1..7, every variant: peak exactly 8192.
+ - periodicity of sine variant 0: |pcm[start+i] - pcm[start+i+120]| <= 600 for i in 0..100 (two periods per cycle; 239/2 = 119.5).
+ - drum: drums[1].end - drums[1].start == kDrumLen, flags == 0, pcm[drums[1].start] != 0.
+ - names: msNames[0] is "Sine", msNames[8] is "Wave 08", msNames[99] is "Wave 99", drumNames[0] is "Noise Hit".
+
+IMPORTANT CODING RULES: the file must compile cleanly with `g++ -std=c++17 -Wall -Wextra`. Use DISTINCT variable names for the two pseudo-random generators (for example `nseed` for the noise wave and `dseed` for the drum), and wrap each generator in its own `{ ... }` block so nothing is declared twice in one scope. Use `int` (not `uint32_t`) for the loop counters and constants you compare them with, or cast, to avoid sign-compare warnings. Do not leave unused variables.
+
+CRITICAL IMPLEMENTATION RULE (a previous attempt failed on this): compute each cycle into a local `double buf[kCycle]` FIRST (never store an unscaled value into the int16 array: it would be truncated to 0, +-1, ...). Find the peak of `buf` (max absolute value), then write `s.pcm[start + i] = (int16_t)lround(buf[i] * 8192.0 / peak)` for every i (skip the scaling only if peak == 0). The Noise wave must be generated with ONE running generator per region (seed 12345, advanced once per sample, i.e. `x = x*1103515245u + 12345u` once per i), not re-run from the seed for every sample. Wave 0 must still produce a pure sine and its peak must come out exactly 8192.
