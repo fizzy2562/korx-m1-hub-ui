@@ -1,0 +1,11 @@
+TASK: write ONE Python 3 script `apply_fix.py` (usage: `python apply_fix.py <hdr_in> <hdr_out> <test_in> <test_out>`) that patches two C++ files with EXACT single-occurrence replacements. Output format exactly:
+
+### FILE: apply_fix.py
+<python code>
+
+Rules: define `rep(src, old, new, tag)` asserting `src.count(old) == 1` (else print the tag and sys.exit(1)). Files may use CRLF: open with newline='', `text = text.replace('\r\n','\n')` after reading, edit, then `text.replace('\n','\r\n')` before writing (write with newline=''). Use raw triple-quoted strings (r'''...''') with no leading/trailing newline inside the quotes. Apply these 3 edits, then print "OK 3":
+HEADER file:
+ 1. old: `            sp.tune128 = 3;`   new: `            sp.tune128 = 2;   // calibrated: measured pitch error was a constant -0.78 cents with 3`
+ 2. old: `    s.drums[1].tune128 = 3;`   new: `    s.drums[1].tune128 = 2;`
+TEST file:
+ 3. old: `sp.tune128 != 3 ||`   new: `sp.tune128 != 2 ||`

@@ -27,7 +27,7 @@ int main()
         for (int v = 0; v < m1free::kVariants; ++v) {
             const m1::Split& sp = samples.splits[samples.ms[m].first + v];
             if (sp.end - sp.start != m1free::kCycle || sp.loop != sp.start ||
-                sp.top != tops[v] || sp.root != roots[v] || sp.flags != 1 || sp.tune128 != 3 ||
+                sp.top != tops[v] || sp.root != roots[v] || sp.flags != 1 || sp.tune128 != 2 ||
                 sp.start < 8 || sp.end + 4 > samples.pcmWords) {
                 multisoundOk = 0;
             }

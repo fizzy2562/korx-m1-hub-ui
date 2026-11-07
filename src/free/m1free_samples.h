@@ -139,7 +139,7 @@ inline void generateSamples(SampleSet& s)
             sp.start = static_cast<uint32_t>((wave * kVariants + v) * kWaveStride + kPad);
             sp.loop = sp.start;
             sp.end = sp.start + kCycle;
-            sp.tune128 = 3;
+            sp.tune128 = 2;   // calibrated: measured pitch error was a constant -0.78 cents with 3
             sp.top = static_cast<uint8_t>(tops[v]);
             sp.pan = 5;
             sp.root = static_cast<uint8_t>(roots[v]);
@@ -150,7 +150,7 @@ inline void generateSamples(SampleSet& s)
     s.drums[1].start = static_cast<uint32_t>(dbase);
     s.drums[1].loop = static_cast<uint32_t>(dbase);
     s.drums[1].end = static_cast<uint32_t>(dbase + kDrumLen);
-    s.drums[1].tune128 = 3;
+    s.drums[1].tune128 = 2;
     s.drums[1].flags = 0;
     snprintf(s.drumNameBuf[0], sizeof(s.drumNameBuf[0]), "Noise Hit");
     s.drumNames[0] = s.drumNameBuf[0];
