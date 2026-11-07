@@ -23,7 +23,12 @@ static void renderCase(int prog, int dry, float* outL, int total) {
     g_eng.playProgram(g_blk);
     g_eng.noteOn(0, 60, 100);
     int rendered = 0;
+    bool released = false;
     while (rendered < total) {
+        if (!released && rendered >= 37500) {
+            g_eng.noteOff(0, 60);   // release the note at 1.2 s, then keep rendering
+            released = true;
+        }
         int chunk = 500;
         if (total - rendered < chunk) {
             chunk = total - rendered;
@@ -31,7 +36,6 @@ static void renderCase(int prog, int dry, float* outL, int total) {
         g_eng.render(outL + rendered, outL + rendered, chunk);
         rendered += chunk;
     }
-    g_eng.noteOff(0, 60);
 }
 
 int main(void) {

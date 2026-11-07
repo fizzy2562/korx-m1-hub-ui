@@ -1,0 +1,44 @@
+TASK: write TWO C++17 files that generate, from FORMULAS ONLY (no ROM data), the reverb and early-reflection coefficient tables of a Korg-M1-style synth engine. No STL, no heap, only <stdint.h>, <math.h>. Output format exactly:
+
+### FILE: m1free_fx_reverb.h
+<code>
+
+### FILE: fx_reverb_test.cpp
+<code>
+
+The engine header `#include "m1_engine/m1_fx.h"` defines (namespace m1) these structs (given exactly):
+```
+struct FxRevType {          // Hall, Ensemble Hall, Concert Hall, Room, Large Room, Live Stage
+    float   g[4];           // allpass gains AP0..AP3
+    float   comb_out[8];    // comb tap gains L0,R0,L1,R1,L2,R2,L3,R3
+    int16_t ap_d[4], comb_d[4], tap_l[4], tap_r[4];
+    float   g_in;
+    float   fb[4][98];      // comb feedback per Reverb Time byte 0..97
+    float   damp[4][100];   // comb damping per High Damp byte 0..99
+    int16_t base_ap, base_erl, base_err, base_erc;
+    float   er_scale[3];    // centre, left, right early-reflection scale
+};
+struct FxErType { float g[4]; float tg[25]; };
+struct FxTables { FxRevType rev[6]; ... FxErType er[3]; float er_T[25], er_A[4]; ... };   // you touch ONLY rev[0..5], er[0..2], er_T, er_A
+```
+=== m1free_fx_reverb.h (header-only, `#pragma once`, namespace m1free, everything inline) ===
+`#include "m1_engine/m1_fx.h"` and <math.h>. Provide `inline void generateFxTablesReverb(m1::FxTables& t);` which fills exactly rev[0..5], er[0..2], er_T and er_A (leave every other member untouched). Use double internally and a local helper named `fxrv_rnd` (NOT `rnd`, `fxrnd` or any other name already used elsewhere): `static inline long fxrv_rnd(double x) { return (long)floor(x + 0.5); }`.
+A. Reverbs, type index ty = 0..5 (0 Hall, 1 Ensemble Hall, 2 Concert Hall, 3 Room, 4 Large Room, 5 Live Stage). Per-type parameters: scale s[ty] = {1.00, 1.15, 1.35, 0.35, 0.60, 0.80}; reverb-time range in seconds Tmin[ty] = {0.6, 0.6, 0.8, 0.25, 0.4, 0.3} and Tmax[ty] = {8.0, 9.0, 10.0, 2.5, 4.0, 3.5}; early-reflection level scale erl[ty] = {0.45, 0.45, 0.45, 0.60, 0.55, 0.50}.
+ - base comb delays (samples at 31250 Hz) cb0 = {1687, 1601, 2053, 2251}; `comb_d[k] = fxrv_rnd(cb0[k] * s[ty])` but never below 64; `tap_l[k] = fxrv_rnd(comb_d[k] * 0.37)`, `tap_r[k] = fxrv_rnd(comb_d[k] * 0.63)` (so every tap <= comb_d).
+ - base allpass delays ab0 = {142, 107, 379, 277}; `ap_d[k] = fxrv_rnd(ab0[k] * (0.5 + 0.5 * min(s[ty], 1.0)))`, at least 8.
+ - `g = {0.55, 0.50, 0.50, 0.50}`; `comb_out[2*k] = 0.25 * (k % 2 == 0 ? 1 : -1)`; `comb_out[2*k+1] = 0.25 * (k < 2 ? 1 : -1)` for k = 0..3; `g_in = 0.45`.
+ - `base_ap = 0`; `base_erc = fxrv_rnd(450 * s[ty])`; `base_erl = fxrv_rnd(300 * s[ty])`; `base_err = fxrv_rnd(620 * s[ty])`; `er_scale = {0.45 * erl[ty]/0.45, 0.40 * erl[ty]/0.45, 0.40 * erl[ty]/0.45}` (i.e. {erl, 0.889*erl, 0.889*erl}).
+ - reverb time: for rt = 0..97: T60 = Tmin * pow(Tmax/Tmin, rt/97.0). The engine's comb loop has a DC gain of 0.9668 * fb, so for each comb k: `fb[k][rt] = min(0.97, pow(10.0, -3.0 * comb_d[k] / (31250.0 * T60)) / 0.9668)`; store as float.
+ - damping: for hd = 0..99 and each comb k: `damp[k][hd] = min(0.7, 0.7 * pow(hd/99.0, 1.2) * (1.0 + 0.02*k))`.
+B. Early reflections, type index et = 0..2 (E.Ref 1, 2, 3): `er[et].g = {0.50, 0.45, 0.40, 0.40}`; tap gains tg[k], k = 0..24: et 0: `0.40 * exp(-0.12 * k)`; et 1: `0.35 * exp(-0.08 * k) * (k % 2 == 0 ? 1 : -1)`; et 2 (reverse): `(k < 22) ? 0.05 + 0.40 * k / 21.0 : 0.0`.
+C. Shared: `er_T[k]` for k = 0..24: `fmin(1.0, fmax(0.02, 0.04 + 0.96 * pow(k / 24.0, 0.9) + 0.012 * sin(k * 5.1)))`; `er_A = {1.3, 0.9, 2.2, 1.7}`.
+
+=== fx_reverb_test.cpp ===
+A standalone program (`main`) including "m1free_fx_reverb.h", a `static m1::FxTables t;` (zero static storage), call generateFxTablesReverb, print `PASS <name>` / `FAIL <name> <detail>` (return non-zero if any FAIL):
+ - for every ty 0..5: comb_d[k] in [64, 4500] and tap_l[k] <= comb_d[k] and tap_r[k] <= comb_d[k] and tap_l[k] >= 1; ap_d[k] >= 8;
+ - MEMORY BUDGET per reverb type (the engine allocates, in a 32768-word ring): `maxTap = 6256 + base_ap; for each b in {base_erc, base_erl, base_err}: maxTap = max(maxTap, 6256 + b); total = (maxTap + 2) + sum over k of (ap_d[k] + 2) + sum over k of (max(comb_d[k], tap_l[k], tap_r[k]) + 2)`; require total <= 32768 for every ty (print the totals);
+ - fb: for every ty, k and rt: 0 < fb <= 0.97 and fb non-decreasing in rt; damp: 0 <= damp <= 0.7, damp[k][0] == 0 and non-decreasing in hd;
+ - for ty 0 the equivalent T60 recovered from fb: for rt = 97 and comb k = 0, T60 = -3*comb_d[0]/(31250*log10(fb*0.9668)) is within 5% of 8.0 (unless fb was clamped at 0.97: in that case just require fb == 0.97f) -- print the value; for ty 3 (Room) rt = 0 gives T60 within 10% of 0.25 or fb at clamp;
+ - Early reflections: er_T within [0.02, 1.0] for all k; er_T[24] > er_T[0]; er_A sum * 80 + 12 <= 1500; er[0].tg[0] within 1e-6 of 0.40; er[2].tg[22] == 0.0f and er[2].tg[21] within 1e-6 of 0.45;
+ - untouched members remain zero: t.wt[0] == 0 and t.lfo_inc[5] == 0.
+Both files compile with ZERO warnings under `g++ -std=c++17 -Wall -Wextra`; declare every variable once per scope; no unused variables; int loop counters.

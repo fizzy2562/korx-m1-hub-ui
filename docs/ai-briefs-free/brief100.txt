@@ -1,0 +1,34 @@
+TASK: write ONE Python 3 script `apply_fix.py` (usage: `python apply_fix.py <in.cpp> <out.cpp>`) that patches a C++ test file with ONE EXACT single-occurrence replacement of a multi-line block. Output format exactly:
+
+### FILE: apply_fix.py
+<python code>
+
+Rules: define `rep(src, old, new)` asserting `src.count(old) == 1` (else print the old text and sys.exit(1)). The file may use CRLF: open with newline='', `text = text.replace('\r\n','\n')` after reading, edit, then `text.replace('\n','\r\n')` before writing (write with newline=''). Use raw triple-quoted strings (r'''...''') with no leading/trailing newline inside the quotes. Apply exactly this edit, then print "OK 1":
+old:
+    g_eng.noteOn(0, 60, 100);
+    int rendered = 0;
+    while (rendered < total) {
+        int chunk = 500;
+        if (total - rendered < chunk) {
+            chunk = total - rendered;
+        }
+        g_eng.render(outL + rendered, outL + rendered, chunk);
+        rendered += chunk;
+    }
+    g_eng.noteOff(0, 60);
+new:
+    g_eng.noteOn(0, 60, 100);
+    int rendered = 0;
+    bool released = false;
+    while (rendered < total) {
+        if (!released && rendered >= 37500) {
+            g_eng.noteOff(0, 60);   // release the note at 1.2 s, then keep rendering
+            released = true;
+        }
+        int chunk = 500;
+        if (total - rendered < chunk) {
+            chunk = total - rendered;
+        }
+        g_eng.render(outL + rendered, outL + rendered, chunk);
+        rendered += chunk;
+    }

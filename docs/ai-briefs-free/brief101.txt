@@ -1,0 +1,16 @@
+TASK: write ONE Python 3 script `apply_fix.py` (usage: `python apply_fix.py <in.cpp> <out.cpp>`) that patches a C++ test file with EXACT single-occurrence replacements. Output format exactly:
+
+### FILE: apply_fix.py
+<python code>
+
+Rules: define `rep(src, old, new, tag)` asserting `src.count(old) == 1` (else print the tag and sys.exit(1)). The file may use CRLF: open with newline='', `text = text.replace('\r\n','\n')` after reading, edit, then `text.replace('\n','\r\n')` before writing (write with newline=''). Use raw triple-quoted strings (r'''...''') with no leading/trailing newline inside the quotes. Apply these 2 edits, then print "OK 2":
+1. old:
+            for (j = 38000; j < 40500; j++) {
+new:
+            for (j = 38300; j < 41500; j++) {
+2. old:
+            if (eA > 2.0 * eB) {
+                printf("PASS p18_er_tail\n");
+new:
+            if (eA > 1e-4 && eA > 10.0 * eB) {
+                printf("PASS p18_er_tail\n");

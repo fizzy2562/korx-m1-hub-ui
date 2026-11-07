@@ -1,0 +1,13 @@
+TASK: write ONE C++17 file `fx_render_test2.cpp`, a native (host) test that renders REVERB programs through a synth engine and checks each is stable, audible and has a reverb tail. Follow EXACTLY the structure, helper names and style of the context file `fx_render_test.cpp` (a working test for other effect programs; copy its includes, static storage, `renderCase` function and the PASS/FAIL printing). No STL containers, only plain arrays. Output format exactly:
+
+### FILE: fx_render_test2.cpp
+<code>
+
+Differences from the context file:
+ - the programs under test are 14..18: 14 Hall Pad (reverb type 0), 15 Room Keys (type 3), 16 Stage Lead (type 5), 17 Conc Strings (type 2), 18 Early Bell (early reflection type 6);
+ - keep `renderCase(prog, dry, outL, total)` as is: the note is held 1.2 s (37500 frames) then released, total 2.5 s (78125 frames);
+ - generic checks for every program, printed as in the context file: `p<N>_finite` (all samples finite and |x| < 8.0), `p<N>_audible` (rmsA > 1e-4 and rmsB > 1e-4), `p<N>_effect_differs` (diffRms > 0.02 * rmsB);
+ - REVERB TAIL check for programs 14, 15, 16, 17 (not 18): energy (sum of squares) of A over samples [40625, 56250) (1.30 s to 1.80 s, just after the note is released at 1.2 s) must be greater than 5.0 times the energy of B over the same window; print both energies in the line `tail energy A=<..> B=<..>` and name the check `p<N>_reverb_tail`;
+ - for program 18 (early reflections): energy of A over [37500+500, 37500+3000) must be greater than 2.0 times that of B over the same window (name `p18_er_tail`), printing both energies;
+ - one summary line per program: `prog <N> rmsA=<..> rmsB=<..> diff=<..>`.
+Do NOT remove or rename anything the context file needs; remove only what is specific to the old programs (tremolo and echo checks). The file must compile with ZERO warnings under `g++ -std=c++17 -O2 -Wall -Wextra`; declare every variable once per scope; no unused variables or static arrays; use int loop counters.

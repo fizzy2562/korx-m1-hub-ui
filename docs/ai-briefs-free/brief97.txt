@@ -1,0 +1,22 @@
+TASK: write ONE Python 3 script `apply_fix.py` (usage: `python apply_fix.py <in.h> <out.h>`) that patches a C++ header with EXACT single-occurrence string replacements. Output format exactly:
+
+### FILE: apply_fix.py
+<python code>
+
+Rules: define `rep(src, old, new, tag)` asserting `src.count(old) == 1` (else print the tag and sys.exit(1)). The file may use CRLF: open with newline='', `text = text.replace('\r\n','\n')` after reading, edit, then `text.replace('\n','\r\n')` before writing (write with newline=''). Use raw triple-quoted strings (r'''...''') with no leading/trailing newline inside the quotes. Apply these 3 edits, then print "OK 3":
+1. old:
+#include "m1free_fx.h"
+new:
+#include "m1free_fx.h"
+#include "m1free_patches_fx2.h"
+#include "m1free_fx_reverb.h"
+2. old:
+    generateFxPatches(f.p);
+new:
+    generateFxPatches(f.p);
+    generateFxPatches2(f.p);
+3. old:
+    generateFxTablesBasic(f.fx);
+new:
+    generateFxTablesBasic(f.fx);
+    generateFxTablesReverb(f.fx);

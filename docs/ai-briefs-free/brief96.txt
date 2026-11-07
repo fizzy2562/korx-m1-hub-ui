@@ -1,0 +1,28 @@
+TASK: write TWO C++17 files that add five ORIGINAL reverb programs to a Korg-M1-style patch set. No STL, no heap, only <stdint.h>, <string.h>. Output format exactly:
+
+### FILE: m1free_patches_fx2.h
+<code>
+
+### FILE: patches_fx2_test.cpp
+<code>
+
+=== m1free_patches_fx2.h (header-only, `#pragma once`, namespace m1free, everything inline) ===
+`#include "m1free_patches_fx.h"` (given as context; it includes "m1free_patches.h" and defines `static inline void setFx1(uint8_t* blk, int type, int bal, const uint8_t* p8)` which sets byte 38 = type, byte 39 = 33, bytes 40 and 41 = bal, bytes 42..45 = 0, byte 46 = 0x03 and copies the 8 parameter bytes to bytes 47..54; the PatchSet struct with `uint8_t programs[100*143]`; and `makeProgram(uint8_t* blk, const char* name, int wave, int octave, int cutoff, int atk, int dcy, int sus, int rel)`).
+Provide `inline void generateFxPatches2(PatchSet& p);` creating programs 14..18 at `p.programs + 143*n` (touch nothing else). Each is `makeProgram(...)` followed by `setFx1(...)`:
+ 14 "Hall Pad"     : makeProgram(6, 0, 85, 25, 40, 85, 45); type 0 (Hall), balance 35, p = {60, 0, 40, 20, 40, 0, 0, 0}   (p[0] reverb time, p[2] high damp, p[3] pre-delay ms, p[4] early-reflection level, p[6] EQ high, p[7] EQ low)
+ 15 "Room Keys"    : makeProgram(4, 0, 99, 0, 0, 99, 5); type 3 (Room), balance 30, p = {25, 0, 30, 5, 50, 0, 0, 0}
+ 16 "Stage Lead"   : makeProgram(1, 0, 90, 2, 30, 80, 20); type 5 (Live Stage), balance 30, p = {40, 0, 35, 10, 45, 0, 0, 0}
+ 17 "Conc Strings" : makeProgram(6, 0, 70, 30, 35, 85, 40); type 2 (Concert Hall), balance 40, p = {75, 0, 45, 30, 35, 0, 0, 0}
+ 18 "Early Bell"   : makeProgram(3, 0, 99, 0, 45, 10, 40); type 6 (Early Reflection 1), balance 45, p = {40, 15, 0, 0, 0, 0, 0, 0}   (p[0] reflection time, p[1] pre-delay ms)
+Use uint8_t arrays for the p8 arguments.
+
+=== patches_fx2_test.cpp ===
+Standalone program (`main`) including "m1free_patches_fx2.h": a static PatchSet; call generatePatches(p), generateFxPatches(p), THEN generateFxPatches2(p); print `PASS <name>` / `FAIL <name> <detail>` per check, return non-zero on any FAIL:
+ - program 14: name bytes "Hall Pad  " (10 chars exactly), byte 38 == 0, byte 39 == 33, byte 40 == 35, byte 41 == 35, byte 46 == 3, byte 47 == 60, byte 49 == 40, byte 50 == 20, byte 51 == 40, byte 12 == 6;
+ - program 15: byte 38 == 3, byte 40 == 30, byte 47 == 25, byte 49 == 30, byte 50 == 5, byte 51 == 50, byte 12 == 4;
+ - program 16: byte 38 == 5, byte 40 == 30, byte 47 == 40, byte 49 == 35, byte 50 == 10, byte 51 == 45;
+ - program 17: byte 38 == 2, byte 40 == 40, byte 47 == 75, byte 49 == 45, byte 50 == 30, byte 51 == 35;
+ - program 18: name "Early Bell", byte 38 == 6, byte 40 == 45, byte 47 == 40, byte 48 == 15;
+ - programs 14..18: byte 10 == 0, byte 86 == 99, byte 46 == 3;
+ - programs 0..13 are unchanged compared with a second PatchSet built with only generatePatches + generateFxPatches; programs 19..99 are entirely zero; combinations, kits and global unchanged compared with the second PatchSet.
+Both files compile with ZERO warnings under `g++ -std=c++17 -Wall -Wextra`; declare every variable once per scope; no unused variables; no sign-compare warnings.
