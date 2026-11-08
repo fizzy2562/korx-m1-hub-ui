@@ -34,3 +34,13 @@ A build of the engine with **no Korg data of any kind**: every table is generate
 ## Provenance of the code
 
 Written by a local qwen3.8 model from short briefs (`docs/ai-briefs-free/`), with exact-match patch scripts and independent verification by the orchestrating assistant. One file (the sample generator) failed twice on qwen (it truncated samples before normalising, then ran away) and was written by Codex from the same spec (20,469 tokens), then re-verified independently. Two bugs found by the tests were in the briefs, not the model: a wrong kernel normalisation formula, and a test that expected an octave-low program to sound at its played pitch.
+
+## Help screen, captions and effect mapping (2026-11-08)
+
+* **HOME (tap)** shows a help page built from the live page (what F1-F6, K1-K6 and the four knob columns do right now); HOME or RETURN closes it, LEFT/RIGHT page through it. Holding HOME for 1 s is the Hub's own library shortcut and is not handled by the firmware. The Hub shows a custom cheat sheet only for firmwares in its library, so a file loaded with "Load your own .wasm" gets the generic text; this firmware explains itself on screen instead. `docs/cheatsheet.html` is for a later library submission.
+* **Key captions** (`vibe_wasm_labels`) change with the page. The Program play screen shows an effect line (`FX: <type 1> / <type 2>`).
+* **Effects:** all 33 types can be selected for FX1 and FX2 in Program and Combination edit pages with readable, editable parameters (`tools/verify_free_ui.mjs`, 144 checks pass). Reference: `docs/EFFECTS_MAP.md`, `docs/CONTROLS.md`.
+* **Checked in the real Hub page** (headless Chrome on the build box): the build loads, no crash, and a key-down gives audible output through the Hub's AudioWorklet. Engine, tables, samples and patches are unchanged by this step; only the adapter, model and view changed (the model and view are shared with the Korg-sample UI build, which still compiles with them).
+* **Known layout problems (not fixed):** the help page's K1-K6 column is misaligned and E1-E4 read "Unused" on Program play; on effect pages the bottom status line is clipped against the soft keys and the first column's slider bar draws only its right half; the Program play line shows `Off` where a multisound name is expected (not investigated).
+* **Not verified:** how the help text reads to a player, and any listening judgment. A local audio-LLM review was tried and abandoned: `gemma4:12b` through Ollama gave answers that did not depend on the clip (silence, 440 Hz and 1000 Hz tests), so it cannot judge audio here.
+

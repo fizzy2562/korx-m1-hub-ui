@@ -277,6 +277,7 @@ void vibe_wasm_audio(uint32_t n, uint32_t flags) {
 
 __attribute__((export_name("vibe_wasm_event")))
 void vibe_wasm_event(uint32_t type, uint32_t id, uint32_t down, float value, uint32_t midi) {
+    if (type != 3 && type != 4) g_ui.help = false;
     if (type == 5) {
         handleMidi(midi);
     } else if (type == 2) {

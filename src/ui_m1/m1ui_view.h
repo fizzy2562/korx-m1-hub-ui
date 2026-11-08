@@ -151,19 +151,54 @@ inline int meter100(float value){
     return n>100?100:(int)n;
 }
 
-inline void strip(const Model&m){rect(10,30,460,1,GRID);char title[16];if(m.nGroups)upper(m.groupName[m.group],title,16);else strcpy(title,"READY");text(12,8,"KORX",INK);text(70,8,title,INK);char p[12];snprintf(p,sizeof(p),"%02d/%02d",m.group+1,m.nGroups);text(425,8,p,INK);for(int i=0;i<8;++i)rect(12+i*57,34,48,3,(i==m.group%8)?INK:GRID);}
-inline void params(const Model&m,bool env,bool filter){for(int i=0;i<4;++i){const m1::ParamDef*p=slotParam(m,i);if(!p)continue;char a[16],v[16];snprintf(a,sizeof(a),"%s",p->name);float ignored=0;m1::paramFormat(*p,block(m),v,sizeof(v),&ignored);int x=10+i*115,sel=i==0;rect(x,44,108,154,sel?INV_BG:BG);rect(x,44,108,1,GRID);rect(x,197,108,1,GRID);text(x+5,51,a,sel?INV_FG:INK);text(x+5,69,v,sel?INV_FG:INK,2);rect(x+5,101,98,7,GRID);rect(x+5,101,pnorm(p,m)*98/100,7,INK);}
+inline void strip(const Model&m){rect(10,30,460,1,GRID);char title[16];if(m.playing)strcpy(title,m.mode?"COMBI PLAY":"PROGRAM PLAY");else if(m.nGroups)upper(m.groupName[m.group],title,16);else strcpy(title,"READY");text(12,8,"KORX",INK);text(70,8,title,INK);char p[12];snprintf(p,sizeof(p),"%02d/%02d",m.group+1,m.nGroups);text(425,8,p,INK);for(int i=0;i<8;++i)rect(12+i*57,34,48,3,(i==m.group%8)?INK:GRID);}
+inline void params(const Model&m,bool env,bool filter){for(int i=0;i<4;++i){const m1::ParamDef*p=slotParam(m,i);if(!p)continue;char a[16],v[16];snprintf(a,sizeof(a),"%s",p->name);float ignored=0;m1::paramFormat(*p,block(m),v,sizeof(v),&ignored);int x=10+i*115,sel=i==0;rect(x,44,108,154,sel?INV_BG:BG);rect(x,44,108,1,GRID);rect(x,197,108,1,GRID);text(x+5,51,a,sel?INV_FG:INK);text(x+5,69,v,sel?INV_FG:INK,tWidth(v,2)>98?1:2);rect(x+5,101,98,7,GRID);rect(x+5,101,pnorm(p,m)*98/100,7,INK);}
     if(env){int x=16,y=211;rect(10,205,460,65,GRID);rect(12,207,456,61,BG);int px[5]={x,x+90,x+190,x+300,464},py[5];for(int i=0;i<5;++i){const m1::ParamDef*p=slotParam(m,i<4?i:3);int z=p?m1::paramGet(*p,block(m)):0;py[i]=y+43-(z+99)*43/198;if(py[i]<y)py[i]=y;if(py[i]>y+43)py[i]=y+43;if(i){line(px[i-1],py[i-1],px[i],py[i],INK);line(px[i-1],py[i-1]+1,px[i],py[i]+1,INK);}}}
     else if(filter){rect(10,205,460,65,GRID);rect(12,207,456,61,BG);for(int i=0;i<16;++i){int x=16+i*29;int z=pnorm(slotParam(m,0),m)*(i+1)/32;line(x,263,x,263-z,INK);line(x+1,263,x+1,263-z,INK);}}
 }
 inline void play(const Model&m,const Meters&mt){char n[11],num[8];getName(m,n);int cur=m.mode?m.combi:m.program;snprintf(num,sizeof(num),"A%02d",cur);text(14,48,m.mode?"COMBINATION":"PROGRAM",INK);text(14,72,num,INK,2);text(70,65,n,INK,3);if(m.edited)text(430,74,"*",INK,2);if(m.comparing)text(400,50,"CMP",INK);
     if(!m.mode){char value[16],summary[52];summary[0]=0;for(int i=0;i<3;++i){int idx=(m.nGroups>1?m.groupFirst[1]:0)+i;if(idx<m.nParams){m1::paramFormat(m.params[idx],block(m),value,sizeof(value),nullptr);if(i)strcat(summary," / ");strcat(summary,value);}}int sc=tWidth(summary,2)>430?1:2;text(14,100,summary,INK,sc);
-text(14,140,"VOICE USE",INK);rect(100,140,350,6,GRID);rect(100,140,mt.voices*350/16,6,INK);text(14,154,"L / R",INK);rect(100,154,350,6,GRID);rect(100,154,meter100(mt.l)*350/100,6,INK);rect(100,164,meter100(mt.r)*350/100,6,INK);{const uint8_t*pb=block(m);int f1=pb[38],f2=pb[39];text(14,190,"FX 1",INK);text(70,190,m1::kFxNames[f1<34?f1:33],INK);text(14,204,"FX 2",INK);text(70,204,m1::kFxNames[f2<34?f2:33],INK);}}
+text(14,140,"VOICE USE",INK);rect(100,140,350,6,GRID);rect(100,140,mt.voices*350/16,6,INK);text(14,154,"L / R",INK);rect(100,154,350,6,GRID);rect(100,154,meter100(mt.l)*350/100,6,INK);rect(100,164,meter100(mt.r)*350/100,6,INK);{const uint8_t*pb=block(m);int f1=pb[38],f2=pb[39];char fx[64];snprintf(fx,sizeof(fx),"FX: %s / %s",m1::kFxNames[f1<34?f1:33],m1::kFxNames[f2<34?f2:33]);text(14,190,fx,INK);}}
     else for(int i=0;i<8;++i){int y=102+i*18,pn=combiTimbreProgram(m,i),lv=combiTimbreLevel(m,i);char t[16],nm[11];snprintf(t,sizeof(t),"%c %02d",'A'+i,pn);programName(m,pn,nm);text(14,y,t,INK);text(62,y,nm,INK);rect(190,y+1,200,5,GRID);rect(190,y+1,lv*200/99,5,INK);text(405,y,combiTimbreOn(m,i)?"ON":"--",INK);}
 }
 inline bool fontTestMode=false;
 inline void fontTest(){rect(0,0,480,320,BG);text(8,8,"ASCII 32..126 SCALE 1",INK);char row[33];for(int off=0;off<95;off+=32){int n=0;for(int j=0;j<32&&off+j<95;++j)row[n++]=(char)(32+off+j);row[n]=0;text(8,26+(off/32)*10,row,INK,1);}text(8,60,"PRG - PRG + COMBI COMPARE",INK);text(8,70,"PAGE - PAGE + KORX",INK);text(8,80,"Piano16' Brass1&2 E.Piano1",INK);text(8,96,"ASCII 32..126 SCALE 3",INK);for(int off=0;off<95;off+=10){int n=0;for(int j=0;j<10&&off+j<95;++j)row[n++]=(char)(32+off+j);row[n]=0;text(8,112+(off/10)*20,row,INK,3);}}
-inline void draw(const Model&m,const Meters&mt){rect(0,0,480,320,BEZEL);rect(6,4,468,312,BG);for(int y=4;y<282;y+=8)for(int x=6;x<474;x+=8)rect(x,y,1,1,GRID);if(fontTestMode){fontTest();return;}strip(m);if(m.group==0)play(m,mt);else{bool e=strstr(m.groupName[m.group],"EG")!=nullptr;bool f=strstr(m.groupName[m.group],"VDF")!=nullptr&&!e;params(m,e,f);}char c[25][8];captions(m,c);for(int i=0;i<6;++i){int x=6+i*79,s=i==3&&m.comparing;rect(x,282,73,34,s?INV_BG:BEZEL);textC(x+36,294,c[i],s?INV_FG:KEYTXT);}}
+inline void help(const Model& m) {
+    rect(6,4,468,312,BG);
+    char row[78], caps[25][8]; captions(m,caps);
+    snprintf(row,sizeof(row),"HELP %d/2 - %s %s",m.helpPage+1,m.mode?"COMBI":"PROGRAM",m.playing?"PLAY":m.groupName[m.group]);
+    text(14,12,row,INK);
+    if(!m.helpPage) {
+        for(int i=0;i<6;++i) {
+            snprintf(row,sizeof(row),"F%d: %s     K%d: %s",i+1,caps[i],i+1,caps[10+i][0]?caps[10+i]:"Unused (No Effect)");
+            text(14,36+i*18,row,INK);
+        }
+        for(int i=0;i<4;++i) {
+            const m1::ParamDef* p=m.playing?nullptr:slotParam(m,i); char v[24];
+            if(p) m1::paramFormat(*p,block(m),v,sizeof(v),nullptr);
+            snprintf(row,sizeof(row),"E%d: %s%s%s",i+1,p?p->name:"Unused",p?" = ":"",p?v:"");
+            text(14,154+i*22,row,INK);
+        }
+    } else {
+        const char* rows[]={"A / DATA: previous or next program/combi",
+            "B / F3: switch Program / Combination",
+            "ENTER: toggle Play / current edit page",
+            "RETURN: close help; otherwise return to Play",
+            "LEFT / RIGHT: help page 1 / 2 while help is open",
+            "Otherwise LEFT / RIGHT: previous / next 4 parameters",
+            "F5 / F6: previous / next edit group (wraps)",
+            "SHIFT: hold for parameter steps of 4",
+            "OCT- / OCT+: unused; keyboard starts C3 (MIDI 48)",
+            "Keys: play notes, velocity sensitive; release stops note",
+            "MENU / REC / STOP / PLAY / DATA PUSH / pads: unused",
+            "Pedal: sustain. MIDI: notes and engine MIDI controls"};
+        for(int i=0;i<12;++i) text(14,36+i*18,rows[i],INK);
+    }
+    text(14,270,"HOME / RETURN: close. LEFT / RIGHT: more help",INK);
+    text(14,288,"Other controls act normally and close help",INK);
+    text(14,302,"HOME held 1 s: Hub library (handled by Hub)",INK);
+}
+inline void draw(const Model&m,const Meters&mt){rect(0,0,480,320,BEZEL);rect(6,4,468,312,BG);for(int y=4;y<282;y+=8)for(int x=6;x<474;x+=8)rect(x,y,1,1,GRID);if(fontTestMode){fontTest();return;}if(m.help){help(m);return;}strip(m);if(m.playing)play(m,mt);else{bool e=strstr(m.groupName[m.group],"EG")!=nullptr;bool f=strstr(m.groupName[m.group],"VDF")!=nullptr&&!e;params(m,e,f);char part[64];snprintf(part,sizeof(part),"PART %d/%d   LEFT / RIGHT: parameters   HOME: help",m.sub/4+1,(groupSize(m,m.group)+3)/4);text(14,274,part,INK);}char c[25][8];captions(m,c);for(int i=0;i<6;++i){int x=6+i*79,s=i==3&&m.comparing;rect(x,282,73,34,s?INV_BG:BEZEL);textC(x+36,294,c[i],s?INV_FG:KEYTXT);}}
 inline bool fontCellSelfTest(int ch,int x,int y){for(int k=0;k<5;++k)for(int r=0;r<8;++r){bool got=fb[(y+r)*480+x+k]==INK;bool want=(font5x8[ch-32][k]&(1<<r))!=0;if(got!=want)return false;}return true;}
 inline bool fontCharSelfTest(int ch){if(ch<32||ch>126)return false;rect(0,200,480,16,BG);char s[2]={(char)ch,0};text(8,202,s,INK);return fontCellSelfTest(ch,8,202);}
 inline bool fontLiteralSelfTest(int which){static const char* ss[]={"Piano16'","Universe","Brass1&2","Octave"};if(which<0||which>=4)return false;const char*s=ss[which];rect(0,200,480,16,BG);text(8,202,s,INK);for(int i=0;s[i];++i)if(!fontCellSelfTest((unsigned char)s[i],8+i*6,202))return false;return true;}

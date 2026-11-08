@@ -17,7 +17,7 @@ struct Host {
     bool (*hasCombi)(int n);
 };
 
-constexpr int kMaxParams = 160, kMaxGroups = 40;
+constexpr int kMaxParams = 256, kMaxGroups = 40;
 
 struct Model {
     const Host* host = nullptr;
@@ -25,11 +25,13 @@ struct Model {
     uint8_t program = 0, combi = 0;
     uint8_t progEdit[143] = {0};
     uint8_t combiEdit[124] = {0};
+    bool playing = true, help = false;
+    int helpPage = 0;
     bool edited = false, comparing = false, shift = false;
     m1::ParamDef params[kMaxParams];
     int nParams = 0;
     char groupName[kMaxGroups][12];
-    uint8_t groupFirst[kMaxGroups];
+    uint16_t groupFirst[kMaxGroups];
     int nGroups = 0;
     int group = 0;
     int sub = 0;
@@ -89,7 +91,7 @@ inline void buildPages(Model& m) {
                 if (!started) {
                     if (m.nGroups >= kMaxGroups) break;
                     snprintf(m.groupName[m.nGroups], 12, "%s", title);
-                    m.groupFirst[m.nGroups] = (uint8_t)m.nParams;
+                    m.groupFirst[m.nGroups] = (uint16_t)m.nParams;
                     m.nGroups++;
                     started = true;
                 }
@@ -116,7 +118,7 @@ inline void buildPages(Model& m) {
                     if (!started) {
                         if (m.nGroups >= kMaxGroups) break;
                         snprintf(m.groupName[m.nGroups], 12, "%s", title);
-                        m.groupFirst[m.nGroups] = (uint8_t)m.nParams;
+                        m.groupFirst[m.nGroups] = (uint16_t)m.nParams;
                         m.nGroups++;
                         started = true;
                     }
@@ -139,7 +141,7 @@ inline void buildPages(Model& m) {
             if (!started) {
                 if (m.nGroups >= kMaxGroups) break;
                 snprintf(m.groupName[m.nGroups], 12, "%s", pg.title);
-                m.groupFirst[m.nGroups] = (uint8_t)m.nParams;
+                m.groupFirst[m.nGroups] = (uint16_t)m.nParams;
                 m.nGroups++;
                 started = true;
             }
@@ -234,6 +236,7 @@ inline void selectCombi(Model& m, int n) {
 inline void stepItem(Model& m, int dir);
 
 inline void setMode(Model& m, int mode) {
+    m.playing = true;
     m.mode = (uint8_t)(mode ? 1 : 0);
     m.comparing = false;
     if (m.host) {
@@ -366,7 +369,21 @@ inline void getName(const Model& m, char* out) {
     out[len] = '\0';
 }
 
+inline int jumpGroup(const Model& m, int key) {
+    if (key == 0) return 0;
+    if (key == 1) return 1;
+    if (key == 5) return m.mode ? 2 : 0;
+    const char* prefix = key == 2 ? "Effects" : key == 3 ? "FX1 " : "FX2 ";
+    for (int g=0; g<m.nGroups; ++g) if (!strncmp(m.groupName[g],prefix,strlen(prefix))) return g;
+    return -1;
+}
 inline void event(Model& m, int type, int id, int down, float value) {
+    if (type == 3 && down && id == 17) { m.help = !m.help; m.helpPage=0; return; }
+    if (m.help) {
+        if (type == 3 && down && (id == 18 || id == 20)) { m.helpPage ^= 1; return; }
+        if (type == 3 && down && id == 16) { m.help=false; return; }
+        if ((type == 3 && down) || (type == 4 && value != 0)) m.help=false;
+    }
     if (type == 3) { // BUTTON
         if (id == 6) { // SHIFT
             m.shift = (down != 0);
@@ -380,12 +397,14 @@ inline void event(Model& m, int type, int id, int down, float value) {
             case 1: stepItem(m, +1); break;
             case 2: setMode(m, !m.mode); break;
             case 3: toggleCompare(m); break;
-            case 4: stepGroup(m, -1); break;
-            case 5: stepGroup(m, +1); break;
-            case 9: setMode(m, !m.mode); break;
+            case 4: m.playing=false; stepGroup(m, -1); break;
+            case 5: m.playing=false; stepGroup(m, +1); break;
+            case 9: m.playing = !m.playing; break;
+            case 16: m.playing=true; break;
             case 10: case 11: case 12: case 13: case 14: case 15: {
-                int g = id - 10;
-                if (g < m.nGroups) {
+                int g = jumpGroup(m, id - 10);
+                m.playing = id == 10;
+                if (g >= 0 && g < m.nGroups) {
                     m.group = g;
                     m.sub = 0;
                 }
@@ -395,8 +414,8 @@ inline void event(Model& m, int type, int id, int down, float value) {
                 m.group = 0;
                 m.sub = 0;
                 break;
-            case 18: stepSub(m, -1); break;
-            case 20: stepSub(m, +1); break;
+            case 18: m.playing=false; stepSub(m, -1); break;
+            case 20: m.playing=false; stepSub(m, +1); break;
         }
     } else if (type == 4) { // ENCODER
         if (value == 0.0f) return;
@@ -404,7 +423,7 @@ inline void event(Model& m, int type, int id, int down, float value) {
         if (m.shift) delta *= 4;
         
         if (id >= 0 && id <= 3) {
-            editSlot(m, id, delta);
+            if (!m.playing) editSlot(m, id, delta);
         } else if (id == 4 || id == 6) {
             stepItem(m, delta);
         } else if (id == 5) {
@@ -414,38 +433,16 @@ inline void event(Model& m, int type, int id, int down, float value) {
 }
 
 inline void captions(const Model& m, char out[25][8]) {
-    for (int i = 0; i < 25; ++i) {
-        memset(out[i], 0, 8);
-    }
-    
-    // F1..F6 (indices 0..5)
-    const char* f1 = "PRG -";
-    const char* f2 = "PRG +";
-    const char* f3 = (m.mode == 0) ? "COMBI" : "PROG";
-    const char* f4 = m.comparing ? "EDITED" : "COMPARE";
-    const char* f5 = "PAGE -";
-    const char* f6 = "PAGE +";
-    
-    const char* fLabels[6] = {f1, f2, f3, f4, f5, f6};
-    for (int i = 0; i < 6; ++i) {
-        int len = (int)strlen(fLabels[i]);
-        if (len > 7) len = 7;
-        memcpy(out[i], fLabels[i], len);
-    }
-    
-    // K1..K6 (indices 10..15)
-    for (int i = 0; i < 6; ++i) {
-        int g = i;
-        if (g < m.nGroups) {
-            int len = (int)strlen(m.groupName[g]);
-            if (len > 7) len = 7;
-            for (int j = 0; j < len; ++j) {
-                char c = m.groupName[g][j];
-                if (c >= 'a' && c <= 'z') c = (char)(c - 'a' + 'A');
-                out[10 + i][j] = c;
-            }
-        }
-    }
+    memset(out,0,25*8);
+    const char* labels[25] = {
+        m.mode?"CMB -":"PRG -", m.mode?"CMB +":"PRG +", m.mode?"PROG":"COMBI",
+        m.comparing?"EDITED":"COMPARE", "PAGE -", "PAGE +", "X4", "", "",
+        m.playing?"EDIT":"PLAY", "PLAY", m.mode?"TYPE":"OSC", "EFFECTS", "FX1", "FX2",
+        m.mode?"TIMBRE":"NAME", m.help?"CLOSE":"PLAY", "HELP",
+        m.help?"HELP <":"PART -", "", m.help?"HELP >":"PART +", "", "", "", ""
+    };
+    for(int i=0;i<25;++i) if(labels[i]) snprintf(out[i],8,"%s",labels[i]);
+    for(int i=3;i<=4;++i) if(jumpGroup(m,i)<0) out[10+i][0]=0;
 }
 
 } // namespace m1ui
